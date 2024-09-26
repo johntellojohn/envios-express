@@ -118,67 +118,43 @@ async function connectToWhatsApp() {
         if (!messages[0]?.key.fromMe) {
           const captureMessage = messages[0]?.message?.conversation;
           const numberWa = messages[0]?.key?.remoteJid;
-          console.log(numberWa);
-          console.log(captureMessage);
 
+          //Verificar si es usuario o grupo
           const regex = /^.*@([sg]).*$/;
           const match = numberWa.match(regex);
+          const cliente = false;
           if (match) {
             console.log(match[1]);
             switch (match[1]) {
               case "s":
-                console.log("es usuario");
+                cliente = true;
                 break;
               case "g":
-                console.log("es grupo");
+                cliente = false;
                 break;
               default:
-                console.log("ninguno");
+                cliente = false;
                 break;
             }
           } else {
-            console.log("No se encontró una coincidencia");
+            cliente = false;
           }
 
           //Solo numero de Deyssi envios desde mi pc
-          if (numberWa == "593981773526@s.whatsapp.net") {
+          if (cliente && numberWa == "593981773526@s.whatsapp.net") {
             // if(numberWa == "593981076291@s.whatsapp.net" || numberWa == "593999925407@s.whatsapp.net"){
             const compareMessage = captureMessage.toLocaleLowerCase();
-            if (compareMessage === "ping") {
-              await sock.sendMessage(
-                numberWa,
-                {
-                  text: "Pong",
-                },
-                {
-                  quoted: messages[0],
-                }
-              );
-            } else {
-              await sock.sendMessage(
-                numberWa,
-                {
-                  text: "Temporalmente en pruebas no enviar whatsapp... :(",
-                },
-                {
-                  quoted: messages[0],
-                }
-              );
-            }
+            await sock.sendMessage(
+              numberWa,
+              {
+                text: "whatsapp on",
+              },
+              {
+                quoted: messages[0],
+              }
+            );
           }
         }
-        // else{
-        //   const numberWa = messages[0]?.key?.remoteJid;
-        //   await sock.sendMessage(
-        //     numberWa,
-        //     {
-        //       text: "Temporalmente en pruebas no enviar whatsapp... :(",
-        //     },
-        //     {
-        //       quoted: messages[0],
-        //     }
-        //   );
-        // }
       }
     } catch (error) {
       console.log("error ", error);
