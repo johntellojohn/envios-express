@@ -123,8 +123,8 @@ async function connectToWhatsApp() {
 
           const regex = /^.*@([sg]).*$/;
           const match = captureMessage.match(regex);
-          console.log(match);
-          switch (match) {
+          console.log(match[1]);
+          switch (match[1]) {
             case "s":
               console.log("es usuario");
               break;
