@@ -122,7 +122,7 @@ async function connectToWhatsApp() {
           console.log(captureMessage);
 
           const regex = /^.*@([sg]).*$/;
-          const match = captureMessage.match(regex);
+          const match = numberWa.match(regex);
           if (match) {
             console.log(match[1]);
             switch (match[1]) {
