@@ -119,8 +119,8 @@ async function connectToWhatsApp() {
           const captureMessage = messages[0]?.message?.conversation;
           const numberWa = messages[0]?.key?.remoteJid;
           
-          //Solo numero de Hilary envios desde mi pc
-          if(numberWa == "593981076291@s.whatsapp.net"){ 
+          //Solo numero de Deyssi envios desde mi pc
+          if(numberWa == "593981773526@s.whatsapp.net"){ 
           // if(numberWa == "593981076291@s.whatsapp.net" || numberWa == "593999925407@s.whatsapp.net"){ 
             const compareMessage = captureMessage.toLocaleLowerCase();
             if (compareMessage === "ping") {
