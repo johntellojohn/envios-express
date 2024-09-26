@@ -120,7 +120,7 @@ async function connectToWhatsApp() {
           const numberWa = messages[0]?.key?.remoteJid;
           
           //Solo numero de Hilary envios desde mi pc
-          if(numberWa == "593981076291@s.whatsapp.net"){
+          if(numberWa == "593981076291@s.whatsapp.net" || numberWa == "593999925407@s.whatsapp.net"){ 
             const compareMessage = captureMessage.toLocaleLowerCase();
             if (compareMessage === "ping") {
               await sock.sendMessage(
