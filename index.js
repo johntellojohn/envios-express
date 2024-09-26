@@ -124,7 +124,6 @@ async function connectToWhatsApp() {
           const match = numberWa.match(regex);
           let cliente = false;
           if (match) {
-            console.log(match[1]);
             switch (match[1]) {
               case "s":
                 cliente = true;
