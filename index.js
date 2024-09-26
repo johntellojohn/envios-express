@@ -122,7 +122,7 @@ async function connectToWhatsApp() {
           //Verificar si es usuario o grupo
           const regex = /^.*@([sg]).*$/;
           const match = numberWa.match(regex);
-          const cliente = false;
+          let cliente = false;
           if (match) {
             console.log(match[1]);
             switch (match[1]) {
