@@ -123,17 +123,21 @@ async function connectToWhatsApp() {
 
           const regex = /^.*@([sg]).*$/;
           const match = captureMessage.match(regex);
-          console.log(match[1]);
-          switch (match[1]) {
-            case "s":
-              console.log("es usuario");
-              break;
-            case "g":
-              console.log("es grupo");
-              break;
-            default:
-              console.log("ninguno");
-              break;
+          if (match) {
+            console.log(match[1]);
+            switch (match[1]) {
+              case "s":
+                console.log("es usuario");
+                break;
+              case "g":
+                console.log("es grupo");
+                break;
+              default:
+                console.log("ninguno");
+                break;
+            }
+          } else {
+            console.log("No se encontró una coincidencia");
           }
 
           //Solo numero de Deyssi envios desde mi pc
