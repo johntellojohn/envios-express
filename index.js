@@ -141,8 +141,37 @@ async function connectToWhatsApp() {
 
           //Solo numero de Deyssi envios desde mi pc
           if (cliente && numberWa == "593981773526@s.whatsapp.net") {
-            // if(numberWa == "593981076291@s.whatsapp.net" || numberWa == "593999925407@s.whatsapp.net"){
-            const compareMessage = captureMessage.toLocaleLowerCase();
+            // Preparar los datos a enviar al webhook
+            const data = {
+              name: from,
+              description: captureMessage,
+              empresa: "sigcrm_equipodevs",
+            };
+
+            console.log(data);
+            // Enviar los datos al webhook
+            fetch("https://sigcrm.pro/response-baileys", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(data),
+            })
+              .then((response) => {
+                if (!response.ok) {
+                  throw new Error("Network response was not ok");
+                }
+                return response.json();
+              })
+              .then((responseData) => {
+                console.log("Success:", responseData);
+              })
+              .catch((error) => {
+                console.error("Error:", error);
+              });
+
+
+
             await sock.sendMessage(
               numberWa,
               {
