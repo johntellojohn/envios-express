@@ -118,13 +118,26 @@ async function connectToWhatsApp() {
         if (!messages[0]?.key.fromMe) {
           const captureMessage = messages[0]?.message?.conversation;
           const numberWa = messages[0]?.key?.remoteJid;
-          
           console.log(numberWa);
           console.log(captureMessage);
-          
+
+          const regex = /^.*@([sg]).*$/;
+          const match = captureMessage.match(regex);
+          switch (match) {
+            case "s":
+              console.log("es usuario");
+              break;
+            case "g":
+              console.log("es grupo");
+              break;
+            default:
+              console.log("ninguno");
+              break;
+          }
+
           //Solo numero de Deyssi envios desde mi pc
-          if(numberWa == "593981773526@s.whatsapp.net"){ 
-          // if(numberWa == "593981076291@s.whatsapp.net" || numberWa == "593999925407@s.whatsapp.net"){ 
+          if (numberWa == "593981773526@s.whatsapp.net") {
+            // if(numberWa == "593981076291@s.whatsapp.net" || numberWa == "593999925407@s.whatsapp.net"){
             const compareMessage = captureMessage.toLocaleLowerCase();
             if (compareMessage === "ping") {
               await sock.sendMessage(
@@ -148,7 +161,6 @@ async function connectToWhatsApp() {
               );
             }
           }
-          
         }
         // else{
         //   const numberWa = messages[0]?.key?.remoteJid;
@@ -181,10 +193,8 @@ app.get("/send-message", async (req, res) => {
       });
     } else {
       numberWA = "593" + number + "@s.whatsapp.net";
-   
-      if (isConnected()) {
 
-       
+      if (isConnected()) {
         const exist = await sock.onWhatsApp(numberWA);
 
         if (exist?.jid || (exist && exist[0]?.jid)) {
