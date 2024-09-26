@@ -145,18 +145,19 @@ async function connectToWhatsApp() {
             }
           }
           
-        }else{
-          const numberWa = messages[0]?.key?.remoteJid;
-          await sock.sendMessage(
-            numberWa,
-            {
-              text: "Temporalmente en pruebas no enviar whatsapp... :(",
-            },
-            {
-              quoted: messages[0],
-            }
-          );
         }
+        // else{
+        //   const numberWa = messages[0]?.key?.remoteJid;
+        //   await sock.sendMessage(
+        //     numberWa,
+        //     {
+        //       text: "Temporalmente en pruebas no enviar whatsapp... :(",
+        //     },
+        //     {
+        //       quoted: messages[0],
+        //     }
+        //   );
+        // }
       }
     } catch (error) {
       console.log("error ", error);
