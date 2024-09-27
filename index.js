@@ -150,25 +150,25 @@ async function connectToWhatsApp() {
 
             console.log(data);
             // Enviar los datos al webhook
-            // fetch("https://sigcrm.pro/response-baileys", {
-            //   method: "POST",
-            //   headers: {
-            //     "Content-Type": "application/json",
-            //   },
-            //   body: JSON.stringify(data),
-            // })
-            //   .then((response) => {
-            //     if (!response.ok) {
-            //       throw new Error("Network response was not ok");
-            //     }
-            //     return response.json();
-            //   })
-            //   .then((responseData) => {
-            //     console.log("Success:", responseData);
-            //   })
-            //   .catch((error) => {
-            //     console.error("Error:", error);
-            //   });
+            fetch("https://sigcrm.pro/response-baileys", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(data),
+            })
+              .then((response) => {
+                if (!response.ok) {
+                  throw new Error("Network response was not ok");
+                }
+                return response.json();
+              })
+              .then((responseData) => {
+                console.log("Success:", responseData);
+              })
+              .catch((error) => {
+                console.error("Error:", error);
+              });
 
             await sock.sendMessage(
               numberWa,
