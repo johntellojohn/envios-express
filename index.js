@@ -143,7 +143,7 @@ async function connectToWhatsApp() {
           if (cliente && numberWa == "593981773526@s.whatsapp.net") {
             // Preparar los datos a enviar al webhook
             const data = {
-              name: from,
+              name: numberWa,
               description: captureMessage,
               empresa: "sigcrm_equipodevs",
             };
