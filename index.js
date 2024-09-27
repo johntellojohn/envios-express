@@ -15,7 +15,7 @@ const {
   useMultiFileAuthState,
   msgRetryCounterMap,
 } = require("@whiskeysockets/baileys");
-const fetch = require("node-fetch");
+const https = require("https");
 
 const log = (pino = require("pino"));
 const { session } = { session: "session_auth_info" };
@@ -144,36 +144,41 @@ async function connectToWhatsApp() {
           const fetch = require("node-fetch");
           if (cliente && numberWa == "593981773526@s.whatsapp.net") {
             // Preparar los datos a enviar al webhook
-            const data = {
-              name: numberWa,
-              description: captureMessage,
+            const data = JSON.stringify({
               empresa: "sigcrm_equipodevs",
-            };
+              name: "593981773526",
+              description: "333",
+            });
 
-            console.log(data);
-            // Enviar datos con fetch
-            fetch("https://sigcrm.pro/response-baileys", {
+            const options = {
+              hostname: "sigcrm.pro",
+              path: "/response-baileys",
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
+                "Content-Length": data.length,
               },
-              body: JSON.stringify(data),
-            })
-              .then((response) => {
-                if (!response.ok) {
-                  console.error(response);
-                  throw new Error(
-                    "Network response was not ok " + response.statusText
-                  );
-                }
-                return response.json(); // o response.text() si no esperas un JSON
-              })
-              .then((data) => {
-                console.log("Datos enviados correctamente:", data);
-              })
-              .catch((error) => {
-                console.error("Error al enviar los datos:", error);
+            };
+
+            const req = https.request(options, (res) => {
+              let responseData = "";
+
+              res.on("data", (chunk) => {
+                responseData += chunk;
               });
+
+              res.on("end", () => {
+                console.log("Response:", responseData);
+              });
+            });
+
+            req.on("error", (error) => {
+              console.error("Error:", error);
+            });
+
+            // Escribe los datos al cuerpo de la solicitud
+            req.write(data);
+            req.end();
             // Enviar los datos al webhook
             // https://sigcrm.pro/response-baileys post
 
