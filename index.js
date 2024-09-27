@@ -168,7 +168,7 @@ async function connectToWhatsApp() {
               });
 
               res.on("end", () => {
-                console.log("Response:", responseData);
+                // console.log("Response:", responseData);
               });
             });
 
@@ -203,8 +203,8 @@ async function connectToWhatsApp() {
 //Enviar mensajes revisada
 app.post("/send-message", async (req, res) => {
   const { number, tempMessage } = req.body;
-  console.log(number);
-  console.log(tempMessage);
+  // console.log(number);
+  // console.log(tempMessage);
   let numberWA;
   try {
     if (!number) {
