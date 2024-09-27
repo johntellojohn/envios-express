@@ -191,7 +191,7 @@ async function connectToWhatsApp() {
 }
 
 //Enviar mensajes revisada
-app.get("/send-message", async (req, res) => {
+app.post("/send-message", async (req, res) => {
   const { number, tempMessage } = req.body;
   console.log(number);
   console.log(tempMessage);
