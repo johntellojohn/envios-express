@@ -151,17 +151,15 @@ async function connectToWhatsApp() {
             };
 
             console.log(data);
-          
             axios.post('https://sigcrm.pro/response-baileys', data)
-              .then(response => {
-                  console.log('Datos enviados correctamente:', response.data);
-              })
-              .catch(error => {
-                  console.error('Error al enviar los datos:', error);
-              });
-              
+            .then(response => {
+                console.log('Datos enviados correctamente:', response.data);
+            })
+            .catch(error => {
+                console.error('Error al enviar los datos:', error);
+            });
             // Enviar los datos al webhook
-            https://sigcrm.pro/response-baileys post
+            // https://sigcrm.pro/response-baileys post
              
 
             // await sock.sendMessage(
