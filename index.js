@@ -116,9 +116,20 @@ async function connectToWhatsApp() {
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     try {
       if (type === "notify") {
+        
         if (!messages[0]?.key.fromMe) {
+
           const captureMessage = messages[0]?.message?.conversation;
           const numberWa = messages[0]?.key?.remoteJid;
+
+          //extrar numero
+          const regexNumber = /(\d+)/;
+          const matchNumber = whatsappNumber.match(regexNumber);
+          if(matchNumber){
+            phoneNumber = matchNumber[1];
+          }else{
+            phoneNumber = '';
+          }
 
           //Verificar si es usuario o grupo
           const regex = /^.*@([sg]).*$/;
@@ -142,11 +153,11 @@ async function connectToWhatsApp() {
 
           //Solo numero de Deyssi envios desde mi pc
           const fetch = require("node-fetch");
-          if (cliente && numberWa == "593981773526@s.whatsapp.net") {
+          if (cliente && phoneNumber !== '' && phoneNumber == "593981773526") {
             // Preparar los datos a enviar al webhook
             const data = JSON.stringify({
               empresa: "sigcrm_equipodevs",
-              name: "593981773526",
+              name: phoneNumber,
               description: captureMessage,
             });
 
@@ -179,8 +190,6 @@ async function connectToWhatsApp() {
             // Escribe los datos al cuerpo de la solicitud
             req.write(data);
             req.end();
-            // Enviar los datos al webhook
-            // https://sigcrm.pro/response-baileys post
 
             // await sock.sendMessage(
             //   numberWa,
@@ -192,7 +201,9 @@ async function connectToWhatsApp() {
             //   }
             // );
           }
+
         }
+
       }
     } catch (error) {
       console.log("error ", error);
