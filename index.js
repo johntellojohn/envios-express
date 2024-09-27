@@ -15,6 +15,7 @@ const {
   useMultiFileAuthState,
   msgRetryCounterMap,
 } = require("@whiskeysockets/baileys");
+const axios = require('axios');
 
 const log = (pino = require("pino"));
 const { session } = { session: "session_auth_info" };
@@ -150,29 +151,18 @@ async function connectToWhatsApp() {
             };
 
             console.log(data);
-            // Enviar los datos al webhook
-            fetch("https://sigcrm.pro/response-baileys", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(data),
-            })
-              .then((response) => {
-                if (!response.ok) {
-                  console.log(response);
-                  throw new Error("Network response was not ok");
-                }else{
-                  console.log(response);
-                }
-                return response.json();
+          
+            axios.post('https://sigcrm.pro/response-baileys', data)
+              .then(response => {
+                  console.log('Datos enviados correctamente:', response.data);
               })
-              .then((responseData) => {
-                console.log("Success:", responseData);
-              })
-              .catch((error) => {
-                console.error("Error:", error);
+              .catch(error => {
+                  console.error('Error al enviar los datos:', error);
               });
+              
+            // Enviar los datos al webhook
+            https://sigcrm.pro/response-baileys post
+             
 
             // await sock.sendMessage(
             //   numberWa,
