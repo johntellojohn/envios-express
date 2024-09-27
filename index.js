@@ -124,7 +124,7 @@ async function connectToWhatsApp() {
 
           //extrar numero
           const regexNumber = /(\d+)/;
-          const matchNumber = whatsappNumber.match(regexNumber);
+          const matchNumber = numberWa.match(regexNumber);
           if(matchNumber){
             phoneNumber = matchNumber[1];
           }else{
