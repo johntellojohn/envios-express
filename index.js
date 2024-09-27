@@ -153,10 +153,11 @@ async function connectToWhatsApp() {
 
           //Solo numero de Deyssi envios desde mi pc
           const fetch = require("node-fetch");
-          if (cliente && phoneNumber !== '' && phoneNumber == "593981773526") {
+          // if (cliente && phoneNumber !== '' && phoneNumber == "593981773526") {
+          if (cliente && phoneNumber !== '') {
             // Preparar los datos a enviar al webhook
             const data = JSON.stringify({
-              empresa: "sigcrm_equipodevs",
+              empresa: "sigcrm_clinicasancho",
               name: phoneNumber,
               description: captureMessage,
             });
