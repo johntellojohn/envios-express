@@ -140,6 +140,7 @@ async function connectToWhatsApp() {
           }
 
           //Solo numero de Deyssi envios desde mi pc
+          const fetch = require('node-fetch');
           if (cliente && numberWa == "593981773526@s.whatsapp.net") {
             // Preparar los datos a enviar al webhook
             const data = {
@@ -172,15 +173,15 @@ async function connectToWhatsApp() {
                 console.error("Error:", error);
               });
 
-            await sock.sendMessage(
-              numberWa,
-              {
-                text: "whatsapp on",
-              },
-              {
-                quoted: messages[0],
-              }
-            );
+            // await sock.sendMessage(
+            //   numberWa,
+            //   {
+            //     text: "whatsapp on",
+            //   },
+            //   {
+            //     quoted: messages[0],
+            //   }
+            // );
           }
         }
       }
