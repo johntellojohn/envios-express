@@ -147,7 +147,7 @@ async function connectToWhatsApp() {
             const data = JSON.stringify({
               empresa: "sigcrm_equipodevs",
               name: "593981773526",
-              description: "333",
+              description: captureMessage,
             });
 
             const options = {
