@@ -118,33 +118,68 @@ async function connectToWhatsApp() {
         if (!messages[0]?.key.fromMe) {
           const captureMessage = messages[0]?.message?.conversation;
           const numberWa = messages[0]?.key?.remoteJid;
-          
-          //Solo numero de Hilary envios desde mi pc
-          if(numberWa == "593981076291@s.whatsapp.net"){ 
-            const compareMessage = captureMessage.toLocaleLowerCase();
-            if (compareMessage === "ping") {
-              await sock.sendMessage(
-                numberWa,
-                {
-                  text: "Pong",
-                },
-                {
-                  quoted: messages[0],
-                }
-              );
-            } else {
-              await sock.sendMessage(
-                numberWa,
-                {
-                  text: "Temporalmente en pruebas no enviar whatsapp... :(",
-                },
-                {
-                  quoted: messages[0],
-                }
-              );
+
+          //Verificar si es usuario o grupo
+          const regex = /^.*@([sg]).*$/;
+          const match = numberWa.match(regex);
+          let cliente = false;
+          if (match) {
+            switch (match[1]) {
+              case "s":
+                cliente = true;
+                break;
+              case "g":
+                cliente = false;
+                break;
+              default:
+                cliente = false;
+                break;
             }
+          } else {
+            cliente = false;
           }
-          
+
+          //Solo numero de Deyssi envios desde mi pc
+          if (cliente && numberWa == "593981773526@s.whatsapp.net") {
+            // Preparar los datos a enviar al webhook
+            const data = {
+              name: from,
+              description: captureMessage,
+              empresa: "sigcrm_equipodevs",
+            };
+
+            console.log(data);
+            // Enviar los datos al webhook
+            // fetch("https://sigcrm.pro/response-baileys", {
+            //   method: "POST",
+            //   headers: {
+            //     "Content-Type": "application/json",
+            //   },
+            //   body: JSON.stringify(data),
+            // })
+            //   .then((response) => {
+            //     if (!response.ok) {
+            //       throw new Error("Network response was not ok");
+            //     }
+            //     return response.json();
+            //   })
+            //   .then((responseData) => {
+            //     console.log("Success:", responseData);
+            //   })
+            //   .catch((error) => {
+            //     console.error("Error:", error);
+            //   });
+
+            await sock.sendMessage(
+              numberWa,
+              {
+                text: "whatsapp on",
+              },
+              {
+                quoted: messages[0],
+              }
+            );
+          }
         }
       }
     } catch (error) {
@@ -167,10 +202,8 @@ app.get("/send-message", async (req, res) => {
       });
     } else {
       numberWA = "593" + number + "@s.whatsapp.net";
-   
-      if (isConnected()) {
 
-       
+      if (isConnected()) {
         const exist = await sock.onWhatsApp(numberWA);
 
         if (exist?.jid || (exist && exist[0]?.jid)) {
