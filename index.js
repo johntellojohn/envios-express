@@ -161,6 +161,7 @@ async function connectToWhatsApp() {
             })
               .then((response) => {
                 if (!response.ok) {
+                  console.error(response);
                   throw new Error(
                     "Network response was not ok " + response.statusText
                   );
