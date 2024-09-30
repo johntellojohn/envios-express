@@ -258,7 +258,7 @@ app.post("/send-message", async (req, res) => {
 
 //Enviar mensajes revisada
 app.post("/send-message-media", async (req, res) => {
-  const { number, tempMessage, linkImage } = req.body;
+  const { number, tempMessage, linkImage, type } = req.body;
 
   console.log(number);
   console.log(tempMessage);
