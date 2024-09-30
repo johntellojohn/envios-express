@@ -260,6 +260,60 @@ app.post("/send-message", async (req, res) => {
   }
 });
 
+//Enviar mensajes revisada
+app.post("/send-message-image", async (req, res) => {
+  const { number, tempMessage, linkImage } = req.body;
+
+  console.log(number);
+  console.log(tempMessage);
+  console.log(linkImage);
+
+  let numberWA;
+  try {
+    if (!number) {
+      res.status(500).json({
+        status: false,
+        response: "El numero no existe",
+      });
+    } else {
+      numberWA = number + "@s.whatsapp.net";
+
+      if (isConnected()) {
+        const exist = await sock.onWhatsApp(numberWA);
+
+        if (exist?.jid || (exist && exist[0]?.jid)) {
+          sock
+            .sendMessage(exist.jid || exist[0].jid, {
+              image:  {
+                url: "https://i.pinimg.com/474x/7f/8e/75/7f8e759aa56e883cfc6d63c08d66c627.jpg"
+              },
+              caption: "Hola Imagen"
+            })
+            .then((result) => {
+              res.status(200).json({
+                status: true,
+                response: result,
+              });
+            })
+            .catch((err) => {
+              res.status(500).json({
+                status: false,
+                response: err,
+              });
+            });
+        }
+      } else {
+        res.status(500).json({
+          status: false,
+          response: "Aun no estas conectado",
+        });
+      }
+    }
+  } catch (err) {
+    res.status(500).send(err);
+  }
+});
+
 const isConnected = () => {
   return sock?.user ? true : false;
 };
