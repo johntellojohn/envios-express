@@ -256,7 +256,7 @@ app.post("/send-message", async (req, res) => {
   }
 });
 
-//Enviar mensajes revisada
+//Enviar mensajes Multimedia type (image, video, audio, location)
 app.post("/send-message-media", async (req, res) => {
   const { number, tempMessage, link, type, latitud, longitud } = req.body;
 
