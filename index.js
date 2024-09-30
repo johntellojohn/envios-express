@@ -258,12 +258,14 @@ app.post("/send-message", async (req, res) => {
 
 //Enviar mensajes revisada
 app.post("/send-message-media", async (req, res) => {
-  const { number, tempMessage, linkImage, type } = req.body;
+  const { number, tempMessage, link, type, latitud, longitud } = req.body;
 
   console.log(number);
   console.log(tempMessage);
-  console.log(linkImage);
+  console.log(link);
   console.log(type);
+  console.log(latitud);
+  console.log(longitud);
 
   let numberWA;
   try {
@@ -284,9 +286,9 @@ app.post("/send-message-media", async (req, res) => {
               sock
                 .sendMessage(exist.jid || exist[0].jid, {
                   image: {
-                    url: linkImage,
+                    url: link,
                   },
-                  caption: "Hola Imagen",
+                  caption: tempMessage,
                 })
                 .then((result) => {
                   res.status(200).json({
@@ -305,9 +307,9 @@ app.post("/send-message-media", async (req, res) => {
               sock
                 .sendMessage(exist.jid || exist[0].jid, {
                   video: {
-                    url: linkImage,
+                    url: link,
                   },
-                  caption: "Es un video con texto",
+                  caption: tempMessage,
                   gifPlayback: true,
                   ptv: false,
                 })
@@ -328,7 +330,7 @@ app.post("/send-message-media", async (req, res) => {
               sock
                 .sendMessage(exist.jid || exist[0].jid, {
                   audio: {
-                    url: linkImage,
+                    url: link,
                   },
                 })
                 .then((result) => {
@@ -344,7 +346,27 @@ app.post("/send-message-media", async (req, res) => {
                   });
                 });
               break;
-
+            case "location":
+              sock
+                .sendMessage(exist.jid || exist[0].jid, {
+                  location: {
+                    degreesLatitude: -0.10345285543021113,
+                    degreesLongitude: -78.49129474097917,
+                  },
+                })
+                .then((result) => {
+                  res.status(200).json({
+                    status: true,
+                    response: result,
+                  });
+                })
+                .catch((err) => {
+                  res.status(500).json({
+                    status: false,
+                    response: err,
+                  });
+                });
+              break;
             default:
               sock
                 .sendMessage(exist.jid || exist[0].jid, {
