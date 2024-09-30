@@ -260,12 +260,12 @@ app.post("/send-message", async (req, res) => {
 app.post("/send-message-media", async (req, res) => {
   const { number, tempMessage, link, type, latitud, longitud } = req.body;
 
-  console.log(number);
-  console.log(tempMessage);
-  console.log(link);
-  console.log(type);
-  console.log(latitud);
-  console.log(longitud);
+  // console.log(number);
+  // console.log(tempMessage);
+  // console.log(link);
+  // console.log(type);
+  // console.log(latitud);
+  // console.log(longitud);
 
   let numberWA;
   try {
@@ -350,8 +350,8 @@ app.post("/send-message-media", async (req, res) => {
               sock
                 .sendMessage(exist.jid || exist[0].jid, {
                   location: {
-                    degreesLatitude: -0.10345285543021113,
-                    degreesLongitude: -78.49129474097917,
+                    degreesLatitude: latitud,
+                    degreesLongitude: longitud,
                   },
                 })
                 .then((result) => {
