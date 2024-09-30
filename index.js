@@ -116,19 +116,17 @@ async function connectToWhatsApp() {
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     try {
       if (type === "notify") {
-        
         if (!messages[0]?.key.fromMe) {
-
           const captureMessage = messages[0]?.message?.conversation;
           const numberWa = messages[0]?.key?.remoteJid;
 
           //extrar numero
           const regexNumber = /(\d+)/;
           const matchNumber = numberWa.match(regexNumber);
-          if(matchNumber){
+          if (matchNumber) {
             phoneNumber = matchNumber[1];
-          }else{
-            phoneNumber = '';
+          } else {
+            phoneNumber = "";
           }
 
           //Verificar si es usuario o grupo
@@ -154,7 +152,7 @@ async function connectToWhatsApp() {
           //Solo numero de Deyssi envios desde mi pc
           const fetch = require("node-fetch");
           // if (cliente && phoneNumber !== '' && phoneNumber == "593981773526") {
-          if (cliente && phoneNumber !== '') {
+          if (cliente && phoneNumber !== "") {
             // Preparar los datos a enviar al webhook
             const data = JSON.stringify({
               empresa: "sigcrm_clinicasancho",
@@ -202,9 +200,7 @@ async function connectToWhatsApp() {
             //   }
             // );
           }
-
         }
-
       }
     } catch (error) {
       console.log("error ", error);
@@ -261,12 +257,13 @@ app.post("/send-message", async (req, res) => {
 });
 
 //Enviar mensajes revisada
-app.post("/send-message-image", async (req, res) => {
+app.post("/send-message-media", async (req, res) => {
   const { number, tempMessage, linkImage } = req.body;
 
   console.log(number);
   console.log(tempMessage);
   console.log(linkImage);
+  console.log(type);
 
   let numberWA;
   try {
@@ -282,25 +279,91 @@ app.post("/send-message-image", async (req, res) => {
         const exist = await sock.onWhatsApp(numberWA);
 
         if (exist?.jid || (exist && exist[0]?.jid)) {
-          sock
-            .sendMessage(exist.jid || exist[0].jid, {
-              image:  {
-                url: "https://i.pinimg.com/474x/7f/8e/75/7f8e759aa56e883cfc6d63c08d66c627.jpg"
-              },
-              caption: "Hola Imagen"
-            })
-            .then((result) => {
-              res.status(200).json({
-                status: true,
-                response: result,
-              });
-            })
-            .catch((err) => {
-              res.status(500).json({
-                status: false,
-                response: err,
-              });
-            });
+          switch (type) {
+            case "image":
+              sock
+                .sendMessage(exist.jid || exist[0].jid, {
+                  image: {
+                    url: linkImage,
+                  },
+                  caption: "Hola Imagen",
+                })
+                .then((result) => {
+                  res.status(200).json({
+                    status: true,
+                    response: result,
+                  });
+                })
+                .catch((err) => {
+                  res.status(500).json({
+                    status: false,
+                    response: err,
+                  });
+                });
+              break;
+            case "video":
+              sock
+                .sendMessage(exist.jid || exist[0].jid, {
+                  video: {
+                    url: linkImage,
+                  },
+                  caption: "Es un video con texto",
+                  gifPlayback: true,
+                  ptv: false,
+                })
+                .then((result) => {
+                  res.status(200).json({
+                    status: true,
+                    response: result,
+                  });
+                })
+                .catch((err) => {
+                  res.status(500).json({
+                    status: false,
+                    response: err,
+                  });
+                });
+              break;
+            case "audio":
+              sock
+                .sendMessage(exist.jid || exist[0].jid, {
+                  audio: {
+                    url: linkImage,
+                  },
+                })
+                .then((result) => {
+                  res.status(200).json({
+                    status: true,
+                    response: result,
+                  });
+                })
+                .catch((err) => {
+                  res.status(500).json({
+                    status: false,
+                    response: err,
+                  });
+                });
+              break;
+
+            default:
+              sock
+                .sendMessage(exist.jid || exist[0].jid, {
+                  text: tempMessage,
+                })
+                .then((result) => {
+                  res.status(200).json({
+                    status: true,
+                    response: result,
+                  });
+                })
+                .catch((err) => {
+                  res.status(500).json({
+                    status: false,
+                    response: err,
+                  });
+                });
+              break;
+          }
         }
       } else {
         res.status(500).json({
