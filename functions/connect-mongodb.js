@@ -1,15 +1,11 @@
 const { MongoClient } = require("mongodb");
 
-const mongoUSER = "whatsapp_api";
-const mongoPASSWD = "8EHKR2jDbsz3x8n0";
-const mongoDB = "whatsapp_api";
-const mongoURI = `mongodb+srv://${mongoUSER}:${mongoPASSWD}@cluster0.ft3wt.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+const config = require("../config.js");
 
 // Conectar a MongoDB
 const connectToMongoDB = async () => {
   try {
-    // Inicializar el cliente de MongoDB
-    const mongoClient = new MongoClient(mongoURI, {
+    const mongoClient = new MongoClient(config.mongoose.url, {
       //   useNewUrlParser: true,
       //   useUnifiedTopology: true,
     });
@@ -19,7 +15,7 @@ const connectToMongoDB = async () => {
     console.log("Conectado a MongoDB correctamente");
 
     // Seleccionar la base de datos
-    const db = mongoClient.db(mongoDB);
+    const db = mongoClient.db("registros_whatsapp");
 
     // Aquí puedes interactuar con tus colecciones, por ejemplo:
     return db;

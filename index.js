@@ -17,6 +17,9 @@ const {
 } = require("@whiskeysockets/baileys");
 const https = require("https");
 
+const dotenv = require("dotenv");
+dotenv.config();
+
 const log = (pino = require("pino"));
 const { session } = { session: "session_auth_info" };
 const { Boom } = require("@hapi/boom");
