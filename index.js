@@ -367,6 +367,26 @@ app.post("/send-message-media", async (req, res) => {
                   });
                 });
               break;
+            case "document":
+              sock
+                .sendMessage(exist.jid || exist[0].jid, {
+                  document: {
+                    url: link,
+                  },
+                })
+                .then((result) => {
+                  res.status(200).json({
+                    status: true,
+                    response: result,
+                  });
+                })
+                .catch((err) => {
+                  res.status(500).json({
+                    status: false,
+                    response: err,
+                  });
+                });
+              break;
             default:
               sock
                 .sendMessage(exist.jid || exist[0].jid, {
