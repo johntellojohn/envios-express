@@ -281,6 +281,12 @@ app.post("/send-message-media", async (req, res) => {
         const exist = await sock.onWhatsApp(numberWA);
 
         if (exist?.jid || (exist && exist[0]?.jid)) {
+          const fechaActual = new Date();
+          const año = fechaActual.getFullYear();
+          const mes = String(fechaActual.getMonth() + 1).padStart(2, "0");
+          const dia = String(fechaActual.getDate()).padStart(2, "0");
+          const nombreArchivo = `${año}-${mes}-${dia}.pdf`;
+
           switch (type) {
             case "image":
               sock
@@ -372,6 +378,7 @@ app.post("/send-message-media", async (req, res) => {
                 .sendMessage(exist.jid || exist[0].jid, {
                   document: {
                     url: link,
+                    fileName: nombreArchivo,
                   },
                   caption: tempMessage,
                 })
