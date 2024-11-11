@@ -373,6 +373,7 @@ app.post("/send-message-media", async (req, res) => {
                   document: {
                     url: link,
                   },
+                  caption: tempMessage,
                 })
                 .then((result) => {
                   res.status(200).json({
