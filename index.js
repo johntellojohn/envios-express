@@ -378,10 +378,9 @@ app.post("/send-message-media", async (req, res) => {
                 .sendMessage(exist.jid || exist[0].jid, {
                   document: {
                     url: link,
-                    fileName: 'file1',
+                    fileName: nombreArchivo,
                   },
-                  caption: 'hola1',
-                  // caption: tempMessage,
+                  caption: tempMessage,
                 })
                 .then((result) => {
                   res.status(200).json({
