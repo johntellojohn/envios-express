@@ -380,7 +380,8 @@ app.post("/send-message-media", async (req, res) => {
                     url: link,
                     fileName: 'file1',
                   },
-                  caption: tempMessage,
+                  caption: 'hola1',
+                  // caption: tempMessage,
                 })
                 .then((result) => {
                   res.status(200).json({
