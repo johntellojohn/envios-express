@@ -117,7 +117,16 @@ async function connectToWhatsApp() {
     try {
       if (type === "notify") {
         if (!messages[0]?.key.fromMe) {
-          const captureMessage = messages[0]?.message?.conversation;
+
+          //Validar msg viene en distinto lugar
+          let captureMessage = 'vacio';
+          if(messages[0]?.message?.extendedTextMessage?.text){
+            captureMessage = messages[0]?.message?.extendedTextMessage?.text;
+          }else if(messages[0]?.message?.conversation){
+            captureMessage = messages[0]?.message?.conversation;
+          }
+
+          console.log(captureMessage);
           const numberWa = messages[0]?.key?.remoteJid;
 
           //extrar numero
