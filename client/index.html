@@ -97,7 +97,6 @@
             <li>
               Escanea el siguiente código QR con tu aplicación de WhatsApp
             </li>
-
             <h5 id="iduser"></h5>
           </span>
         </div>
@@ -117,16 +116,25 @@
 
       const socket = io(); // Conexion al socket
 
-      // Emitir el id_externo para que el servidor envíe el QR correcto
       if (id_externo) {
         socket.emit("joinSession", id_externo);
       }
+
+      // socket.on("refresh", (id_externo_bckend) => {
+      //   console.log(`Evento refresh recibido: ${id_externo}`);
+
+      //   if (id_externo) {
+      //     socket.emit("joinSession", id_externo);
+      //     console.log(`Se envió joinSession con id_externo: ${id_externo}`);
+      //   }
+      // });
 
       socket.on("qr", (url) => {
         qrcode.setAttribute("src", url);
       });
 
       socket.on("qrstatus", (src) => {
+        console.log(`Conectado al servidor con ID de socket: ${id_externo}`);
         qrcode.setAttribute("src", src);
       });
 

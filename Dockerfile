@@ -14,7 +14,7 @@ RUN npm install --force
 COPY . .
 
 # Expone el puerto en el que corre la aplicación
-EXPOSE 4030
+EXPOSE 4010
 
 # Comando para iniciar la aplicación
 CMD ["npm", "start"]

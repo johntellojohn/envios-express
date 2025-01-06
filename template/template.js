@@ -28,6 +28,7 @@ const main = async (app, connected, sock, db) => {
         } else {
           numberWA = number + "@s.whatsapp.net";
 
+          console.log(sock.ws.socket._readyState);
           console.log("Paso la validacion del registro");
 
           if (connected) {
