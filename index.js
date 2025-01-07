@@ -34,8 +34,7 @@ const app = require("express")();
 /* Importaciones para registrar clientes */
 const { createFunction } = require("./functions/functions");
 const connectToMongoDB = require("./functions/connect-mongodb");
-const { useMongoDBAuthState } = require("mongo-baileys");
-// const mongodbAuthState = require("./mongoAuthState");
+const mongoAuthState = require("./mongoAuthState");
 
 // enable files upload
 app.use(
@@ -51,7 +50,6 @@ const server = require("http").createServer(app);
 const io = require("socket.io")(server);
 const port = process.env.PORT || 4030;
 const qrcode = require("qrcode");
-const mongoAuthState = require("./mongoAuthState");
 
 // Variables para el sock
 let db;
@@ -62,7 +60,6 @@ let soket;
 let WhatsAppSessions = {};
 
 app.use(express.static(path.join(__dirname, "client")));
-// app.use("/assets", express.static(__dirname + "/client/assets"));
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "client", "index.html"));
@@ -95,13 +92,19 @@ app.get("/registros", async (req, res) => {
   try {
     const registros = await getUserRecords();
 
+    // Filtramos los campos '_id' y 'qr' del resultado
+    const registrosFiltrados = registros.map((registro) => {
+      const { _id, qr, ...registroSinIdYQR } = registro;
+      return registroSinIdYQR;
+    });
+
     console.log(
       `---------------------------------- Registros Encontrados ----------------------------------`
     );
     res.json({
       result: true,
       success: "datos obtenidos",
-      data: registros,
+      data: registrosFiltrados,
     });
   } catch (err) {
     console.error("********************* Error al obtener registros:", err);
@@ -123,12 +126,6 @@ app.post("/crear-usuario", async (req, res) => {
 
     if (!registroExistente) {
       if (nombre && id_externo) {
-        // let name = createFunction(id_externo);
-        // sms = `Función ${name} creada`;
-        // console.log(
-        //   `---------------------------------- ${sms} ----------------------------------`
-        // );
-
         const registros = db.collection("registros_whatsapp");
         const nuevoRegistro = {
           nombre,
@@ -228,17 +225,16 @@ app.post("/send-message/:id_externo", async (req, res) => {
   let numberWA;
   try {
     if (!number) {
-      res.status(500).json({
+      return res.status(500).json({
         status: false,
         response: "El numero no existe",
       });
     } else {
       numberWA = number + "@s.whatsapp.net";
 
-      const connected = await isConnected(id_externo);
       const sockUser = WhatsAppSessions[id_externo]?.sock;
 
-      if (connected) {
+      if (sockUser) {
         // Verificamos el estado del sock
         const estadoSock =
           WhatsAppSessions[id_externo]?.sock?.ws?.socket?._readyState;
@@ -257,22 +253,28 @@ app.post("/send-message/:id_externo", async (req, res) => {
               text: tempMessage,
             })
             .then((result) => {
-              res.status(200).json({
+              console.log({
+                De: "cliente-" + id_externo,
+                Para: numberWA,
+                Message: tempMessage,
+                Fecha: Date(),
+              });
+              return res.status(200).json({
                 status: true,
                 response: result,
               });
             })
             .catch((err) => {
-              res.status(500).json({
+              return res.status(500).json({
                 status: false,
                 response: err,
               });
             });
         }
       } else {
-        res.status(500).json({
+        return res.status(500).json({
           status: false,
-          response: "Aun no estas conectado",
+          response: "No existe un sock para el usuario",
         });
       }
     }
@@ -311,7 +313,6 @@ app.delete("/eliminar-usuario/:id_externo", async (req, res) => {
   const { id_externo } = req.params;
 
   try {
-    const collection = db.collection("registros_whatsapp");
     const registros = await getUserRecords();
 
     if (!registros) {
@@ -353,18 +354,13 @@ async function removeRegistro(id_externo) {
   try {
     const sessionName = `session_auth_info_${id_externo}`;
 
-    // const jsFilePath = path.join(
-    //   __dirname,
-    //   "functions/clientes_whatsapp",
-    //   `${id_externo}.js`
-    // );
-
     if (WhatsAppSessions[id_externo]) {
       if (WhatsAppSessions[id_externo].sock) {
         try {
           // Verifica si el socket sigue conectado
           if (WhatsAppSessions[id_externo].sock?.socket?._readyState === 1) {
-            await WhatsAppSessions[id_externo].sock.logout(); // Cerrar la sesión de manera segura
+            // await WhatsAppSessions[id_externo].sock.logout();
+            await WhatsAppSessions[id_externo].sock.ws.close();
             console.log(`Conexión cerrada para el ID ${id_externo}`);
           }
         } catch (error) {
@@ -373,12 +369,11 @@ async function removeRegistro(id_externo) {
             error
           );
         }
-        delete WhatsAppSessions[id_externo]; // Limpiar el registro en memoria
+        delete WhatsAppSessions[id_externo];
       }
     }
 
     // Eliminar registro del usuario de MongoDB
-
     const deleteResult = await whatsapp_registros.deleteOne({
       id_externo: id_externo,
     });
@@ -404,20 +399,6 @@ async function removeRegistro(id_externo) {
     } else {
       console.log(`La colección ${sessionName} no existe.`);
     }
-
-    // Eliminación de archivos y carpetas
-    // try {
-    //   await fs.promises.unlink(jsFilePath);
-    //   console.log(`Archivo ${id_externo}.js eliminado con éxito.`);
-    // } catch (error) {
-    //   if (error.code !== "ENOENT") {
-    //     console.error(`Error al eliminar el archivo ${id_externo}.js:`, error);
-    //   } else {
-    //     console.log(
-    //       `No se encontró el archivo ${id_externo}.js para eliminar.`
-    //     );
-    //   }
-    // }
   } catch (error) {
     console.error(
       `Error al eliminar registro con id_externo ${id_externo}:`,
@@ -431,7 +412,6 @@ async function connectToWhatsApp(id_externo) {
   const collection_session = db.collection(sessionCollection);
 
   const { state, saveCreds } = await mongoAuthState(collection_session);
-  // const { state, saveCreds } = await useMongoDBAuthState(collection_session);
 
   const sock = makeWASocket({
     printQRInTerminal: false,
@@ -465,65 +445,77 @@ async function connectToWhatsApp(id_externo) {
         console.log(`QR generado para el usuario: ${id_externo}`);
       }
 
+      if (connection === "connecting") return;
+
       if (connection === "close") {
         console.log("Conexión cerrada detectada");
-        const reason = new Boom(lastDisconnect.error).output.statusCode;
+        // const reason = new Boom(lastDisconnect?.error).output?.statusCode;
+        const reason = lastDisconnect?.error?.output?.statusCode;
 
-        switch (reason) {
-          case DisconnectReason.badSession:
-            console.log(
-              `Archivo de sesión erróneo. Por favor, elimine ${session} y escanee nuevamente.`
-            );
-            connectToWhatsApp(id_externo);
-            break;
-
-          case DisconnectReason.connectionClosed:
-            console.log("Conexión cerrada, reconectando...");
-            try {
-              await connectToWhatsApp(id_externo);
-            } catch (error) {
-              console.error("Error al reconectar:", error);
-            }
-            break;
-
-          case DisconnectReason.connectionLost:
-            console.log("Conexión perdida del servidor, reconectando...");
-            connectToWhatsApp(id_externo);
-            break;
-
-          case DisconnectReason.connectionReplaced:
-            console.log(
-              "Conexión reemplazada. Otra sesión nueva está abierta, cierre la sesión actual primero."
-            );
-            break;
-
-          case DisconnectReason.loggedOut:
-            console.log(
-              `Dispositivo cerrado. Elimine ${session} y escanee nuevamente.`
-            );
-            updateQR("disconnected", userRecord);
-            await removeRegistro(id_externo);
-            break;
-
-          case DisconnectReason.restartRequired:
-            console.log("Se requiere reinicio, reiniciando...");
-            connectToWhatsApp(id_externo);
-            break;
-
-          case DisconnectReason.timedOut:
-            console.log("Tiempo de conexión agotado, reconectando...");
-            connectToWhatsApp(id_externo);
-            break;
-
-          default:
-            console.log(`Razón de desconexión no manejada: ${reason}`);
-            try {
-              sock.end();
-            } catch (error) {
-              console.error("Error cerrando socket:", error);
-            }
-            break;
+        if (statusCode !== DisconnectReason.loggedOut) {
+          await connectToWhatsApp(id_externo);
+        } else if (reason === DisconnectReason.loggedOut) {
+          console.log(
+            `Dispositivo cerrado. Elimine ${session} y escanee nuevamente.`
+          );
+          await removeRegistro(id_externo);
         }
+
+        // switch (reason) {
+        //   case DisconnectReason.badSession:
+        //     console.log(
+        //       `Archivo de sesión erróneo. Por favor, elimine ${session} y escanee nuevamente.`
+        //     );
+        //     connectToWhatsApp(id_externo);
+        //     break;
+
+        //   case DisconnectReason.connectionClosed:
+        //     console.log("Conexión cerrada, reconectando...");
+        //     try {
+        //       await connectToWhatsApp(id_externo);
+        //     } catch (error) {
+        //       console.error("Error al reconectar:", error);
+        //     }
+        //     break;
+
+        //   case DisconnectReason.connectionLost:
+        //     console.log("Conexión perdida del servidor, reconectando...");
+        //     connectToWhatsApp(id_externo);
+        //     break;
+
+        //   case DisconnectReason.connectionReplaced:
+        //     console.log(
+        //       "Conexión reemplazada. Otra sesión nueva está abierta, cierre la sesión actual primero."
+        //     );
+        //     break;
+
+        //   case DisconnectReason.loggedOut:
+        //     console.log(
+        //       `Dispositivo cerrado. Elimine ${session} y escanee nuevamente.`
+        //     );
+        //     updateQR("disconnected", userRecord);
+        //     await removeRegistro(id_externo);
+        //     break;
+
+        //   case DisconnectReason.restartRequired:
+        //     console.log("Se requiere reinicio, reiniciando...");
+        //     connectToWhatsApp(id_externo);
+        //     break;
+
+        //   case DisconnectReason.timedOut:
+        //     console.log("Tiempo de conexión agotado, reconectando...");
+        //     connectToWhatsApp(id_externo);
+        //     break;
+
+        //   default:
+        //     console.log(`Razón de desconexión no manejada: ${reason}`);
+        //     try {
+        //       sock.end();
+        //     } catch (error) {
+        //       console.error("Error cerrando socket:", error);
+        //     }
+        //     break;
+        // }
       } else if (connection === "open") {
         console.log(`conexión abierta para el id: ${id_externo}`);
 
@@ -802,24 +794,14 @@ app.post("/send-message-media", async (req, res) => {
 
 const isConnected = async (id_externo) => {
   try {
-    const userRecord = await getUserRecordByIdExterno(id_externo);
+    // Verificar si el sock está conectado
+    const userSock = WhatsAppSessions[id_externo]?.sock?.user ? true : false;
 
-    if (userRecord && userRecord.estado === "conectado") {
+    if (userSock) {
       console.log(`Usuario ${id_externo} está conectado.`);
-
-      // Verificar si el sock está conectado
-      const userSock = WhatsAppSessions[id_externo]?.sock?.user ? true : false;
-
-      if (!userSock) {
-        console.log(`Sock no encontrado para el usuario: ${id_externo}`);
-        return false;
-      }
-
       return true;
     } else {
-      console.log(
-        `Usuario ${id_externo} no está conectado en la base de datos.`
-      );
+      console.log(`Sock no encontrado para el usuario: ${id_externo}`);
       return false;
     }
   } catch (error) {
@@ -830,8 +812,6 @@ const isConnected = async (id_externo) => {
 
 io.on("connection", async (socket) => {
   soket = socket;
-
-  // soket.emit("refresh");
 
   socket.on("joinSession", async (id_externo) => {
     const userRecord = await getUserRecordByIdExterno(id_externo);
@@ -856,8 +836,6 @@ io.on("connection", async (socket) => {
 
   // Manejo de desconexiones
   socket.on("disconnect", () => {
-    // updateQR("disconnect", userRecord);
-
     console.log(`Cliente desconectado con id_externo: ${socket.id_externo}`);
   });
 });
@@ -930,37 +908,6 @@ async function getUserRecords() {
   return await whatsapp_registros.find().toArray();
 }
 
-const activarEnvios = async (id_externo) => {
-  try {
-    const filePath = path.join(
-      __dirname,
-      `functions/clientes_whatsapp/${id_externo}.js`
-    );
-
-    try {
-      const resultados = [];
-      const createdFunction = require(filePath);
-      const connected = await isConnected(id_externo);
-
-      // Envia los datos a cada js para activar los envios
-      const sockUser = WhatsAppSessions[id_externo]?.sock;
-      const result = await createdFunction(app, connected, sockUser, db);
-      resultados.push({ id_externo, connected, sockUser, result });
-    } catch (error) {
-      console.error(`Error al ejecutar la función ${id_externo}:`, error);
-      resultados.push({
-        id_externo,
-        error: "Error al ejecutar la función",
-      });
-    }
-  } catch (error) {
-    console.error(
-      "Error al obtener los registros o ejecutar las funciones:",
-      error
-    );
-  }
-};
-
 const startServer = async () => {
   try {
     db = await connectToMongoDB();
@@ -977,7 +924,6 @@ const startServer = async () => {
         await connectToWhatsApp(id_externo).catch((err) => {
           console.log(`Error inesperado para id_externo ${id_externo}: ${err}`);
         });
-        // await activarEnvios(id_externo);
       }
     }
 
