@@ -119,7 +119,6 @@ app.get("/registros", async (req, res) => {
 /* Endpoint para crear un nuevo usuario */
 app.post("/crear-usuario", async (req, res) => {
   const { nombre, id_externo, descripcion } = req.body;
-  let sms = "Nuevo registro";
 
   try {
     const registroExistente = await getUserRecordByIdExterno(id_externo);
@@ -452,7 +451,7 @@ async function connectToWhatsApp(id_externo) {
         // const reason = new Boom(lastDisconnect?.error).output?.statusCode;
         const reason = lastDisconnect?.error?.output?.statusCode;
 
-        if (statusCode !== DisconnectReason.loggedOut) {
+        if (reason !== DisconnectReason.loggedOut) {
           await connectToWhatsApp(id_externo);
         } else if (reason === DisconnectReason.loggedOut) {
           console.log(
