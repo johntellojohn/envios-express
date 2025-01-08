@@ -247,28 +247,34 @@ app.post("/send-message/:id_externo", async (req, res) => {
         const exist = await sockUser.onWhatsApp(numberWA);
 
         if (exist?.jid || (exist && exist[0]?.jid)) {
-          sockUser
-            .sendMessage(exist.jid || exist[0].jid, {
-              text: tempMessage,
-            })
-            .then((result) => {
-              console.log({
-                De: "cliente-" + id_externo,
-                Para: numberWA,
-                Message: tempMessage,
-                Fecha: Date(),
-              });
-              return res.status(200).json({
-                status: true,
-                response: result,
-              });
-            })
-            .catch((err) => {
-              return res.status(500).json({
-                status: false,
-                response: err,
-              });
+          try {
+            const result = await sockUser.sendMessage(
+              exist.jid || exist[0].jid,
+              {
+                text: tempMessage,
+              }
+            );
+            console.log({
+              De: "cliente-" + id_externo,
+              Para: numberWA,
+              Message: tempMessage,
+              Fecha: Date(),
             });
+            return res.status(200).json({
+              status: true,
+              response: result,
+            });
+          } catch (err) {
+            return res.status(500).json({
+              status: false,
+              response: err,
+            });
+          }
+        } else {
+          return res.status(404).json({
+            status: false,
+            response: "El número no está en WhatsApp",
+          });
         }
       } else {
         return res.status(500).json({
