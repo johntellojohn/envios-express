@@ -465,62 +465,6 @@ async function connectToWhatsApp(id_externo) {
           );
           await removeRegistro(id_externo);
         }
-
-        // switch (reason) {
-        //   case DisconnectReason.badSession:
-        //     console.log(
-        //       `Archivo de sesión erróneo. Por favor, elimine ${session} y escanee nuevamente.`
-        //     );
-        //     connectToWhatsApp(id_externo);
-        //     break;
-
-        //   case DisconnectReason.connectionClosed:
-        //     console.log("Conexión cerrada, reconectando...");
-        //     try {
-        //       await connectToWhatsApp(id_externo);
-        //     } catch (error) {
-        //       console.error("Error al reconectar:", error);
-        //     }
-        //     break;
-
-        //   case DisconnectReason.connectionLost:
-        //     console.log("Conexión perdida del servidor, reconectando...");
-        //     connectToWhatsApp(id_externo);
-        //     break;
-
-        //   case DisconnectReason.connectionReplaced:
-        //     console.log(
-        //       "Conexión reemplazada. Otra sesión nueva está abierta, cierre la sesión actual primero."
-        //     );
-        //     break;
-
-        //   case DisconnectReason.loggedOut:
-        //     console.log(
-        //       `Dispositivo cerrado. Elimine ${session} y escanee nuevamente.`
-        //     );
-        //     updateQR("disconnected", userRecord);
-        //     await removeRegistro(id_externo);
-        //     break;
-
-        //   case DisconnectReason.restartRequired:
-        //     console.log("Se requiere reinicio, reiniciando...");
-        //     connectToWhatsApp(id_externo);
-        //     break;
-
-        //   case DisconnectReason.timedOut:
-        //     console.log("Tiempo de conexión agotado, reconectando...");
-        //     connectToWhatsApp(id_externo);
-        //     break;
-
-        //   default:
-        //     console.log(`Razón de desconexión no manejada: ${reason}`);
-        //     try {
-        //       sock.end();
-        //     } catch (error) {
-        //       console.error("Error cerrando socket:", error);
-        //     }
-        //     break;
-        // }
       } else if (connection === "open") {
         console.log(`conexión abierta para el id: ${id_externo}`);
 
