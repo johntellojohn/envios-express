@@ -62,9 +62,10 @@ async function connectToWhatsApp() {
   const { state, saveCreds } = await useMultiFileAuthState("session_auth_info");
 
   sock = makeWASocket({
-    printQRInTerminal: true,
+    printQRInTerminal: false,
     auth: state,
     logger: log({ level: "silent" }),
+    qrTimeout: 60 * 1000,
   });
 
   sock.ev.on("connection.update", async (update) => {
@@ -117,12 +118,11 @@ async function connectToWhatsApp() {
     try {
       if (type === "notify") {
         if (!messages[0]?.key.fromMe) {
-
           //Validar msg viene en distinto lugar
-          let captureMessage = 'vacio';
-          if(messages[0]?.message?.extendedTextMessage?.text){
+          let captureMessage = "vacio";
+          if (messages[0]?.message?.extendedTextMessage?.text) {
             captureMessage = messages[0]?.message?.extendedTextMessage?.text;
-          }else if(messages[0]?.message?.conversation){
+          } else if (messages[0]?.message?.conversation) {
             captureMessage = messages[0]?.message?.conversation;
           }
 
@@ -442,11 +442,13 @@ const isConnected = () => {
 
 io.on("connection", async (socket) => {
   soket = socket;
-  if (isConnected()) {
-    updateQR("connected");
-  } else if (qrDinamic) {
-    updateQR("qr");
-  }
+  socket.on("updateData", () => {
+    if (isConnected()) {
+      updateQR("connected");
+    } else if (qrDinamic) {
+      updateQR("qr");
+    }
+  });
 });
 
 const updateQR = (data) => {
@@ -475,7 +477,7 @@ const updateQR = (data) => {
   }
 };
 
-connectToWhatsApp().catch((err) => console.log("unexpected error: " + err)); // catch any errors
+connectToWhatsApp().catch((err) => console.log("unexpected error: " + err));
 server.listen(port, () => {
   console.log("Server Run Port : " + port);
 });
