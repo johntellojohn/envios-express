@@ -1,14 +1,15 @@
-version: '3'
 services:
   app:
-    build: .
+    container_name: envios-express-container
+    build:
+      context: .
+    image: envios-express-2024:latest
     ports:
       - "4010:4010"
     volumes:
       - .:/usr/src/app
     environment:
       NODE_ENV: production
-    restart: always
 
   # nginx:
   #   image: nginx:latest
