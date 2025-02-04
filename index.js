@@ -701,8 +701,9 @@ async function connectToWhatsApp(id_externo) {
 }
 
 //Enviar mensajes Multimedia type (image, video, audio, location)
-app.post("/send-message-media", async (req, res) => {
+app.post("/send-message-media/:id", async (req, res) => {
   const { number, tempMessage, link, type, latitud, longitud } = req.body;
+  const id = req.params.id;
 
   let numberWA;
   try {
