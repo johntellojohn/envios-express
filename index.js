@@ -4,16 +4,6 @@ const {
   MessageOptions,
   Mimetype,
   DisconnectReason,
-  BufferJSON,
-  AnyMessageContent,
-  delay,
-  fetchLatestBaileysVersion,
-  isJidBroadcast,
-  makeCacheableSignalKeyStore,
-  makeInMemoryStore,
-  MessageRetryMap,
-  useMultiFileAuthState,
-  msgRetryCounterMap,
 } = require("@whiskeysockets/baileys");
 const https = require("https");
 
@@ -32,7 +22,6 @@ const bodyParser = require("body-parser");
 const app = require("express")();
 
 /* Importaciones para registrar clientes */
-const { createFunction } = require("./functions/functions");
 const connectToMongoDB = require("./functions/connect-mongodb");
 const mongoAuthState = require("./mongoAuthState");
 
@@ -244,6 +233,38 @@ app.post("/send-message/:id_externo", async (req, res) => {
           sockUser = WhatsAppSessions[id_externo]?.sock;
         }
 
+        // const exist = await sockUser.onWhatsApp(numberWA);
+
+        // if (exist?.jid || (exist && exist[0]?.jid)) {
+        //   try {
+        //     const result = await sockUser.sendMessage(
+        //       exist.jid || exist[0].jid,
+        //       {
+        //         text: tempMessage,
+        //       }
+        //     );
+        //     console.log({
+        //       De: "cliente-" + id_externo,
+        //       Para: numberWA,
+        //       Message: tempMessage,
+        //       Fecha: Date(),
+        //     });
+        //     return res.status(200).json({
+        //       status: true,
+        //       response: result,
+        //     });
+        //   } catch (err) {
+        //     return res.status(500).json({
+        //       status: false,
+        //       response: err,
+        //     });
+        //   }
+        // } else {
+        //   return res.status(404).json({
+        //     status: false,
+        //     response: "El número no está en WhatsApp",
+        //   });
+        // }
         const exist = await sockUser.onWhatsApp(numberWA);
 
         if (exist?.jid || (exist && exist[0]?.jid)) {
@@ -254,20 +275,36 @@ app.post("/send-message/:id_externo", async (req, res) => {
                 text: tempMessage,
               }
             );
+
+            const senderJid = sockUser.user.id;
+            const senderNumber = senderJid.split(":")[0];
+
+            const recipientJid = exist.jid || exist[0].jid;
+            const recipientNumber = recipientJid.split("@")[0];
+
             console.log({
               De: "cliente-" + id_externo,
               Para: numberWA,
+              EnviadoPor: senderNumber,
+              RecibidoPor: recipientNumber,
               Message: tempMessage,
               Fecha: Date(),
+              EstadoEnvio: result,
             });
+
             return res.status(200).json({
               status: true,
-              response: result,
+              response: {
+                result,
+                senderNumber: senderNumber,
+                recipientNumber: recipientNumber,
+              },
             });
           } catch (err) {
+            console.error("Error al enviar mensaje:", err);
             return res.status(500).json({
               status: false,
-              response: err,
+              response: err.message || "Error al enviar mensaje",
             });
           }
         } else {
@@ -362,51 +399,68 @@ async function removeRegistro(id_externo) {
     if (WhatsAppSessions[id_externo]) {
       if (WhatsAppSessions[id_externo].sock) {
         try {
-          // Verifica si el socket sigue conectado
-          if (WhatsAppSessions[id_externo].sock?.socket?._readyState === 1) {
-            // await WhatsAppSessions[id_externo].sock.logout();
-            await WhatsAppSessions[id_externo].sock.ws.close();
+          // Cerrar el socket de WhatsApp (de forma más robusta)
+          if (WhatsAppSessions[id_externo].sock.ws?.close) {
+            // Verifica si ws existe y tiene el método close
+            WhatsAppSessions[id_externo].sock.ws.close();
             console.log(`Conexión cerrada para el ID ${id_externo}`);
+          } else {
+            console.log(
+              `Socket para ${id_externo} parece estar ya cerrado o inválido.`
+            );
           }
-        } catch (error) {
+        } catch (socketError) {
           console.error(
-            `Error al intentar cerrar la sesión para ${id_externo}:`,
-            error
+            `Error cerrando socket para ${id_externo}:`,
+            socketError
           );
+        } finally {
+          // Asegura que la eliminación ocurra incluso si el cierre del socket falla
+          delete WhatsAppSessions[id_externo];
         }
-        delete WhatsAppSessions[id_externo];
       }
     }
 
-    // Eliminar registro del usuario de MongoDB
-    const deleteResult = await whatsapp_registros.deleteOne({
-      id_externo: id_externo,
-    });
+    try {
+      // Eliminar registro del usuario de MongoDB
+      const deleteResult = await whatsapp_registros.deleteOne({
+        id_externo: id_externo,
+      });
 
-    if (deleteResult.deletedCount === 0) {
-      console.warn(
-        `No se encontró un registro en MongoDB con id_externo: ${id_externo}`
-      );
-    } else {
-      console.log(
-        `Registro con id_externo ${id_externo} eliminado correctamente.`
+      if (deleteResult.deletedCount === 0) {
+        console.warn(
+          `No se encontró un registro en MongoDB con id_externo: ${id_externo}`
+        );
+      } else {
+        console.log(
+          `Registro con id_externo ${id_externo} eliminado correctamente.`
+        );
+      }
+    } catch (dbError) {
+      console.error(
+        `Error eliminando registro de usuario de MongoDB:`,
+        dbError
       );
     }
 
-    // Verifica si la colección existe
-    const collections = await db
-      .listCollections({ name: sessionName })
-      .toArray();
+    try {
+      // Eliminar colección de sesión (de forma más robusta)
+      const collections = await db
+        .listCollections({ name: sessionName })
+        .toArray();
 
-    if (collections.length > 0) {
-      await db.collection(sessionName).drop();
-      console.log(`Colección ${sessionName} eliminada correctamente.`);
-    } else {
-      console.log(`La colección ${sessionName} no existe.`);
+      if (collections.length > 0) {
+        await db.collection(sessionName).drop();
+        console.log(`Colección ${sessionName} eliminada correctamente.`);
+      } else {
+        console.log(`La colección ${sessionName} no existe.`);
+      }
+    } catch (collectionError) {
+      console.error(`Error eliminando colección de sesión:`, collectionError);
     }
   } catch (error) {
     console.error(
-      `Error al eliminar registro con id_externo ${id_externo}:`,
+      `Error en removeRegistro con id_externo ${id_externo}:`,
       error
     );
   }
@@ -416,196 +470,210 @@ async function connectToWhatsApp(id_externo) {
   const sessionCollection = `session_auth_info_${id_externo}`;
   const collection_session = db.collection(sessionCollection);
 
-  const { state, saveCreds } = await mongoAuthState(collection_session);
+  try {
+    const { state, saveCreds } = await mongoAuthState(collection_session);
 
-  const sock = makeWASocket({
-    printQRInTerminal: false,
-    auth: state,
-    logger: log({ level: "silent" }),
-    qrTimeout: 60 * 1000,
-  });
+    const sock = makeWASocket({
+      printQRInTerminal: false,
+      auth: state,
+      logger: log({ level: "silent" }),
+      qrTimeout: 60 * 1000,
+    });
 
-  sock.ev.on("connection.update", async (update) => {
-    try {
-      const { connection, lastDisconnect, qr } = update;
-      let previousQR = update.qr;
-
-      const userRecord = await getUserRecordByIdExterno(id_externo);
-
-      if (userRecord) {
-        if (userRecord.sock?.qr !== undefined && userRecord.sock?.qr !== null) {
-          previousQR = userRecord.sock?.qr;
-        }
-
-        await updateUserRecord(id_externo, {
-          sock: {
-            connection: connection || null,
-            lastDisconnect: lastDisconnect || null,
-            qr: qr || previousQR || null,
-          },
-        });
-      }
-
-      if (qr) {
-        console.log(`QR generado para el usuario: ${id_externo}`);
-      }
-
-      if (connection === "connecting") return;
-
-      if (connection === "close") {
-        console.log("Conexión cerrada detectada");
-        // const reason = new Boom(lastDisconnect?.error).output?.statusCode;
-        const reason = lastDisconnect?.error?.output?.statusCode;
-
-        if (reason !== DisconnectReason.loggedOut) {
-          await connectToWhatsApp(id_externo);
-        } else if (reason === DisconnectReason.loggedOut) {
-          console.log(
-            `Dispositivo cerrado. Elimine ${session} y escanee nuevamente.`
-          );
-          await removeRegistro(id_externo);
-        }
-      } else if (connection === "open") {
-        console.log(`conexión abierta para el id: ${id_externo}`);
+    sock.ev.on("connection.update", async (update) => {
+      try {
+        const { connection, lastDisconnect, qr } = update;
+        let previousQR = update.qr;
 
         try {
+          // Try-catch around database operations
           const userRecord = await getUserRecordByIdExterno(id_externo);
+
           if (userRecord) {
-            await updateUserRecord(id_externo, { estado: "conectado" });
+            if (
+              userRecord.sock?.qr !== undefined &&
+              userRecord.sock?.qr !== null
+            ) {
+              previousQR = userRecord.sock?.qr;
+            }
+
+            await updateUserRecord(id_externo, {
+              sock: {
+                connection: connection || null,
+                lastDisconnect: lastDisconnect || null,
+                qr: qr || previousQR || null,
+              },
+            });
           }
-        } catch (error) {
+        } catch (dbError) {
           console.error(
-            `Error actualizando estado de conexión para ${id_externo}:`,
-            error
+            "Error actualizando registro de usuario en connection.update:",
+            dbError
           );
         }
 
-        if (WhatsAppSessions[id_externo]) {
-          console.log(
-            `Reemplazando el socket existente para el id: ${id_externo}`
-          );
-          WhatsAppSessions[id_externo].sock.end(); // Cierra el socket anterior
+        if (qr) {
+          console.log(`QR generado para el usuario: ${id_externo}`);
         }
 
-        WhatsAppSessions[id_externo] = {
-          sock: sock,
-        };
+        if (connection === "connecting") return;
 
-        return;
+        if (connection === "close") {
+          console.log("Conexión cerrada detectada");
+          const reason = lastDisconnect?.error?.output?.statusCode;
+
+          if (reason !== DisconnectReason.loggedOut) {
+            // Introduce a delay before reconnecting to avoid rapid reconnect loops
+            setTimeout(async () => {
+              await connectToWhatsApp(id_externo);
+            }, 5000); // 5 seconds delay - adjust as needed
+          } else if (reason === DisconnectReason.loggedOut) {
+            console.log(
+              `Dispositivo cerrado. Elimine la sesión y escanee nuevamente.`
+            );
+            await removeRegistro(id_externo);
+          }
+        } else if (connection === "open") {
+          console.log(`Conexión abierta para el id: ${id_externo}`);
+
+          try {
+            const userRecord = await getUserRecordByIdExterno(id_externo);
+            if (userRecord) {
+              await updateUserRecord(id_externo, { estado: "conectado" });
+            }
+          } catch (dbError) {
+            console.error(
+              `Error actualizando estado de conexión para ${id_externo}:`,
+              dbError
+            );
+          }
+
+          if (WhatsAppSessions[id_externo]) {
+            console.log(
+              `Reemplazando el socket existente para el id: ${id_externo}`
+            );
+            try {
+              WhatsAppSessions[id_externo].sock.end(); // Cierra el socket anterior. Maneja posibles errores.
+            } catch (socketEndError) {
+              console.error(
+                `Error cerrando el socket anterior:`,
+                socketEndError
+              );
+            }
+          }
+
+          WhatsAppSessions[id_externo] = {
+            sock: sock,
+          };
+
+          return;
+        }
+      } catch (error) {
+        console.error(`Error en connection.update para ${id_externo}:`, error);
       }
-    } catch (error) {
-      console.error(`Error en connection.update para ${id_externo}:`, error);
-    }
-  });
+    });
 
-  //Recibir mensajes revisados y responder
-  // sock.ev.on("messages.upsert", async ({ messages, type }) => {
-  //   try {
-  //     if (type === "notify") {
-  //       if (!messages[0]?.key.fromMe) {
-  //         const captureMessage = messages[0]?.message?.conversation;
-  //         const numberWa = messages[0]?.key?.remoteJid;
-
-  //         //extrar numero
-  //         const regexNumber = /(\d+)/;
-  //         const matchNumber = numberWa.match(regexNumber);
-  //         if (matchNumber) {
-  //           phoneNumber = matchNumber[1];
-  //         } else {
-  //           phoneNumber = "";
-  //         }
-
-  //         //Verificar si es usuario o grupo
-  //         const regex = /^.*@([sg]).*$/;
-  //         const match = numberWa.match(regex);
-  //         let cliente = false;
-  //         if (match) {
-  //           switch (match[1]) {
-  //             case "s":
-  //               cliente = true;
-  //               break;
-  //             case "g":
-  //               cliente = false;
-  //               break;
-  //             default:
-  //               cliente = false;
-  //               break;
-  //           }
-  //         } else {
-  //           cliente = false;
-  //         }
-
-  //         //Solo numero de Deyssi envios desde mi pc
-  //         const fetch = require("node-fetch");
-  //         // if (cliente && phoneNumber !== '' && phoneNumber == "593981773526") {
-  //         if (cliente && phoneNumber !== "") {
-  //           // Preparar los datos a enviar al webhook
-  //           const data = JSON.stringify({
-  //             empresa: "sigcrm_clinicasancho",
-  //             name: phoneNumber,
-  //             description: captureMessage,
-  //           });
-
-  //           const options = {
-  //             hostname: "sigcrm.pro",
-  //             path: "/response-baileys",
-  //             method: "POST",
-  //             headers: {
-  //               "Content-Type": "application/json",
-  //               "Content-Length": data.length,
-  //             },
-  //           };
-
-  //           const req = https.request(options, (res) => {
-  //             let responseData = "";
-
-  //             res.on("data", (chunk) => {
-  //               responseData += chunk;
-  //             });
-
-  //             res.on("end", () => {
-  //               // console.log("Response:", responseData);
-  //             });
-  //           });
-
-  //           req.on("error", (error) => {
-  //             console.error("Error:", error);
-  //           });
-
-  //           // Escribe los datos al cuerpo de la solicitud
-  //           req.write(data);
-  //           req.end();
-
-  //           // await sock.sendMessage(
-  //           //   numberWa,
-  //           //   {
-  //           //     text: "whatsapp on",
-  //           //   },
-  //           //   {
-  //           //     quoted: messages[0],
-  //           //   }
-  //           // );
-  //         }
-  //       }
-  //     }
-  //   } catch (error) {
-  //     console.log("error ", error);
-  //   }
-  // });
-
-  sock.ev.on("creds.update", saveCreds);
+    sock.ev.on("creds.update", saveCreds);
+  } catch (initialConnectionError) {
+    console.error(
+      "Error during initial WhatsApp connection:",
+      initialConnectionError
+    );
+  }
 }
+
+// async function connectToWhatsApp(id_externo) {
+//   const sessionCollection = `session_auth_info_${id_externo}`;
+//   const collection_session = db.collection(sessionCollection);
+
+//   const { state, saveCreds } = await mongoAuthState(collection_session);
+
+//   const sock = makeWASocket({
+//     printQRInTerminal: false,
+//     auth: state,
+//     logger: log({ level: "silent" }),
+//     qrTimeout: 60 * 1000,
+//   });
+
+//   sock.ev.on("connection.update", async (update) => {
+//     try {
+//       const { connection, lastDisconnect, qr } = update;
+//       let previousQR = update.qr;
+
+//       const userRecord = await getUserRecordByIdExterno(id_externo);
+
+//       if (userRecord) {
+//         if (userRecord.sock?.qr !== undefined && userRecord.sock?.qr !== null) {
+//           previousQR = userRecord.sock?.qr;
+//         }
+
+//         await updateUserRecord(id_externo, {
+//           sock: {
+//             connection: connection || null,
+//             lastDisconnect: lastDisconnect || null,
+//             qr: qr || previousQR || null,
+//           },
+//         });
+//       }
+
+//       if (qr) {
+//         console.log(`QR generado para el usuario: ${id_externo}`);
+//       }
+
+//       if (connection === "connecting") return;
+
+//       if (connection === "close") {
+//         console.log("Conexión cerrada detectada");
+//         // const reason = new Boom(lastDisconnect?.error).output?.statusCode;
+//         const reason = lastDisconnect?.error?.output?.statusCode;
+
+//         if (reason !== DisconnectReason.loggedOut) {
+//           await connectToWhatsApp(id_externo);
+//         } else if (reason === DisconnectReason.loggedOut) {
+//           console.log(
+//             `Dispositivo cerrado. Elimine ${session} y escanee nuevamente.`
+//           );
+//           await removeRegistro(id_externo);
+//         }
+//       } else if (connection === "open") {
+//         console.log(`conexión abierta para el id: ${id_externo}`);
+
+//         try {
+//           const userRecord = await getUserRecordByIdExterno(id_externo);
+//           if (userRecord) {
+//             await updateUserRecord(id_externo, { estado: "conectado" });
+//           }
+//         } catch (error) {
+//           console.error(
+//             `Error actualizando estado de conexión para ${id_externo}:`,
+//             error
+//           );
+//         }
+
+//         if (WhatsAppSessions[id_externo]) {
+//           console.log(
+//             `Reemplazando el socket existente para el id: ${id_externo}`
+//           );
+//           WhatsAppSessions[id_externo].sock.end(); // Cierra el socket anterior
+//         }
+
+//         WhatsAppSessions[id_externo] = {
+//           sock: sock,
+//         };
+
+//         return;
+//       }
+//     } catch (error) {
+//       console.error(`Error en connection.update para ${id_externo}:`, error);
+//     }
+//   });
+
+//   sock.ev.on("creds.update", saveCreds);
+// }
 
 //Enviar mensajes Multimedia type (image, video, audio, location)
 app.post("/send-message-media", async (req, res) => {
   const { number, tempMessage, link, type, latitud, longitud } = req.body;
-
-  // console.log(number);
-  // console.log(tempMessage);
-  // console.log(link);
-  // console.log(type);
-  // console.log(latitud);
-  // console.log(longitud);
 
   let numberWA;
   try {
