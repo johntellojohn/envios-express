@@ -574,6 +574,124 @@ async function connectToWhatsApp(id_externo) {
     });
 
     sock.ev.on("creds.update", saveCreds);
+
+    sock.ev.on("messages.upsert", async ({ messages, type }) => {
+      try {
+        if (type === "notify") {
+          const senderJid = messages[0].key.remoteJid;
+          const isGroup = senderJid.endsWith("@g.us"); // Verifica si es un grupo
+          const senderNumber = isGroup
+            ? messages[0].key.participant?.split("@")[0]
+            : senderJid.split("@")[0]; // Maneja grupos y mensajes individuales
+          
+          const reciberNumber = sock.user.id.split(":")[0];
+
+          if (
+            !messages[0]?.key.fromMe &&
+            !messages[0].message?.protocolMessage?.disappearingMode &&
+            !messages[0].message?.protocolMessage?.ephemeralExpiration
+          ) {
+            //Validar msg viene en distinto lugar
+            let captureMessage = "vacio";
+            if (messages[0]?.message?.extendedTextMessage?.text) {
+              captureMessage = messages[0]?.message?.extendedTextMessage?.text;
+            } else if (messages[0]?.message?.conversation) {
+              captureMessage = messages[0]?.message?.conversation;
+            }
+
+            console.log(captureMessage);
+            if (captureMessage !== "vacio") {
+              const numberWa = messages[0]?.key?.remoteJid;
+
+              //extrar numero
+              const regexNumber = /(\d+)/;
+              const matchNumber = numberWa.match(regexNumber);
+              if (matchNumber) {
+                phoneNumber = matchNumber[1];
+              } else {
+                phoneNumber = "";
+              }
+
+              //Verificar si es usuario o grupo
+              const regex = /^.*@([sg]).*$/;
+              const match = numberWa.match(regex);
+              let cliente = false;
+              if (match) {
+                switch (match[1]) {
+                  case "s":
+                    cliente = true;
+                    break;
+                  case "g":
+                    cliente = false;
+                    break;
+                  default:
+                    cliente = false;
+                    break;
+                }
+              } else {
+                cliente = false;
+              }
+
+              //Solo numero de Deyssi envios desde mi pc
+              const fetch = require("node-fetch");
+              // if (cliente && phoneNumber !== '' && phoneNumber == "593981773526") {
+              if (cliente && phoneNumber !== "") {
+                // Preparar los datos a enviar al webhook
+                const data = JSON.stringify({
+                  empresa: "sigcrm_clinicasancho",
+                  name: phoneNumber,
+                  senderNumber: senderNumber,
+                  reciberNumber: reciberNumber,
+                  description: captureMessage,
+                });
+
+                const options = {
+                  hostname: "sigcrm.pro",
+                  path: "/response-baileys",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Content-Length": data.length,
+                  },
+                };
+
+                const req = https.request(options, (res) => {
+                  let responseData = "";
+
+                  res.on("data", (chunk) => {
+                    responseData += chunk;
+                  });
+
+                  res.on("end", () => {
+                    // console.log("Response:", responseData);
+                  });
+                });
+
+                req.on("error", (error) => {
+                  console.error("Error:", error);
+                });
+
+                // Escribe los datos al cuerpo de la solicitud
+                req.write(data);
+                req.end();
+
+                // await sock.sendMessage(
+                //   numberWa,
+                //   {
+                //     text: "whatsapp on",
+                //   },
+                //   {
+                //     quoted: messages[0],
+                //   }
+                // );
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.log("error ", error);
+      }
+    });
   } catch (initialConnectionError) {
     console.error(
       "Error during initial WhatsApp connection:",
