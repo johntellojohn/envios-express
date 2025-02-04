@@ -20,6 +20,7 @@ const fileUpload = require("express-fileupload");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const app = require("express")();
+const moment = require('moment-timezone');
 
 /* Importaciones para registrar clientes */
 const connectToMongoDB = require("./functions/connect-mongodb");
@@ -158,53 +159,6 @@ app.post("/crear-usuario", async (req, res) => {
   }
 });
 
-/* Endpoint para activar el envio de mensajes para el usuario creado */
-app.post("/activar-usuario", async (req, res) => {
-  const { id_externo } = req.body;
-
-  if (id_externo) {
-    try {
-      const filePath = path.join(
-        __dirname,
-        `functions/clientes_whatsapp/${id_externo}.js`
-      );
-
-      const createdFunction = require(filePath);
-
-      const connected = await isConnected(id_externo);
-      const sockUser = WhatsAppSessions[id_externo]?.sock;
-
-      if (!sockUser) {
-        return res.status(404).send({
-          result: false,
-          success: "",
-          error: `No se encontró sock para el usuario con id_externo: ${id_externo}.`,
-        });
-      }
-
-      // Envia la informacion correspondiente del usuario para mensajes
-      const result = await createdFunction(app, connected, sockUser, db);
-
-      res.send({ result });
-    } catch (error) {
-      console.error("Error al ejecutar la función:", error);
-      res.status(500).send({
-        result: false,
-        success: "",
-        error: "Error al ejecutar la función",
-      });
-    }
-  } else {
-    const sms = "Por favor, proporciona el id y un parámetro";
-    console.log(sms);
-    res.status(400).send({
-      result: false,
-      success: "",
-      error: sms,
-    });
-  }
-});
-
 /* Endpoint para realizar el envio de mensajes */
 app.post("/send-message/:id_externo", async (req, res) => {
   const { id_externo } = req.params;
@@ -282,14 +236,14 @@ app.post("/send-message/:id_externo", async (req, res) => {
             const recipientJid = exist.jid || exist[0].jid;
             const recipientNumber = recipientJid.split("@")[0];
 
+            const fechaServidor = moment().tz('America/Guayaquil').format('YYYY-MM-DD HH:mm:ss');
+
             console.log({
               De: "cliente-" + id_externo,
               Para: numberWA,
               EnviadoPor: senderNumber,
-              RecibidoPor: recipientNumber,
               Message: tempMessage,
-              Fecha: Date(),
-              EstadoEnvio: result,
+              Fecha: fechaServidor,
             });
 
             return res.status(200).json({
@@ -575,123 +529,123 @@ async function connectToWhatsApp(id_externo) {
 
     sock.ev.on("creds.update", saveCreds);
 
-    sock.ev.on("messages.upsert", async ({ messages, type }) => {
-      try {
-        if (type === "notify") {
-          const senderJid = messages[0].key.remoteJid;
-          const isGroup = senderJid.endsWith("@g.us"); // Verifica si es un grupo
-          const senderNumber = isGroup
-            ? messages[0].key.participant?.split("@")[0]
-            : senderJid.split("@")[0]; // Maneja grupos y mensajes individuales
+    // sock.ev.on("messages.upsert", async ({ messages, type }) => {
+    //   try {
+    //     if (type === "notify") {
+    //       const senderJid = messages[0].key.remoteJid;
+    //       const isGroup = senderJid.endsWith("@g.us"); // Verifica si es un grupo
+    //       const senderNumber = isGroup
+    //         ? messages[0].key.participant?.split("@")[0]
+    //         : senderJid.split("@")[0]; // Maneja grupos y mensajes individuales
           
-          const reciberNumber = sock.user.id.split(":")[0];
+    //       const reciberNumber = sock.user.id.split(":")[0];
 
-          if (
-            !messages[0]?.key.fromMe &&
-            !messages[0].message?.protocolMessage?.disappearingMode &&
-            !messages[0].message?.protocolMessage?.ephemeralExpiration
-          ) {
-            //Validar msg viene en distinto lugar
-            let captureMessage = "vacio";
-            if (messages[0]?.message?.extendedTextMessage?.text) {
-              captureMessage = messages[0]?.message?.extendedTextMessage?.text;
-            } else if (messages[0]?.message?.conversation) {
-              captureMessage = messages[0]?.message?.conversation;
-            }
+    //       if (
+    //         !messages[0]?.key.fromMe &&
+    //         !messages[0].message?.protocolMessage?.disappearingMode &&
+    //         !messages[0].message?.protocolMessage?.ephemeralExpiration
+    //       ) {
+    //         //Validar msg viene en distinto lugar
+    //         let captureMessage = "vacio";
+    //         if (messages[0]?.message?.extendedTextMessage?.text) {
+    //           captureMessage = messages[0]?.message?.extendedTextMessage?.text;
+    //         } else if (messages[0]?.message?.conversation) {
+    //           captureMessage = messages[0]?.message?.conversation;
+    //         }
 
-            console.log(captureMessage);
-            if (captureMessage !== "vacio") {
-              const numberWa = messages[0]?.key?.remoteJid;
+    //         console.log(captureMessage);
+    //         if (captureMessage !== "vacio") {
+    //           const numberWa = messages[0]?.key?.remoteJid;
 
-              //extrar numero
-              const regexNumber = /(\d+)/;
-              const matchNumber = numberWa.match(regexNumber);
-              if (matchNumber) {
-                phoneNumber = matchNumber[1];
-              } else {
-                phoneNumber = "";
-              }
+    //           //extrar numero
+    //           const regexNumber = /(\d+)/;
+    //           const matchNumber = numberWa.match(regexNumber);
+    //           if (matchNumber) {
+    //             phoneNumber = matchNumber[1];
+    //           } else {
+    //             phoneNumber = "";
+    //           }
 
-              //Verificar si es usuario o grupo
-              const regex = /^.*@([sg]).*$/;
-              const match = numberWa.match(regex);
-              let cliente = false;
-              if (match) {
-                switch (match[1]) {
-                  case "s":
-                    cliente = true;
-                    break;
-                  case "g":
-                    cliente = false;
-                    break;
-                  default:
-                    cliente = false;
-                    break;
-                }
-              } else {
-                cliente = false;
-              }
+    //           //Verificar si es usuario o grupo
+    //           const regex = /^.*@([sg]).*$/;
+    //           const match = numberWa.match(regex);
+    //           let cliente = false;
+    //           if (match) {
+    //             switch (match[1]) {
+    //               case "s":
+    //                 cliente = true;
+    //                 break;
+    //               case "g":
+    //                 cliente = false;
+    //                 break;
+    //               default:
+    //                 cliente = false;
+    //                 break;
+    //             }
+    //           } else {
+    //             cliente = false;
+    //           }
 
-              //Solo numero de Deyssi envios desde mi pc
-              const fetch = require("node-fetch");
-              // if (cliente && phoneNumber !== '' && phoneNumber == "593981773526") {
-              if (cliente && phoneNumber !== "") {
-                // Preparar los datos a enviar al webhook
-                const data = JSON.stringify({
-                  empresa: "sigcrm_clinicasancho",
-                  name: phoneNumber,
-                  senderNumber: senderNumber,
-                  reciberNumber: reciberNumber,
-                  description: captureMessage,
-                });
+    //           //Solo numero de Deyssi envios desde mi pc
+    //           const fetch = require("node-fetch");
+    //           // if (cliente && phoneNumber !== '' && phoneNumber == "593981773526") {
+    //           if (cliente && phoneNumber !== "") {
+    //             // Preparar los datos a enviar al webhook
+    //             const data = JSON.stringify({
+    //               empresa: "sigcrm_clinicasancho",
+    //               name: phoneNumber,
+    //               senderNumber: senderNumber,
+    //               reciberNumber: reciberNumber,
+    //               description: captureMessage,
+    //             });
 
-                const options = {
-                  hostname: "sigcrm.pro",
-                  path: "/response-baileys",
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "Content-Length": data.length,
-                  },
-                };
+    //             const options = {
+    //               hostname: "sigcrm.pro",
+    //               path: "/response-baileys",
+    //               method: "POST",
+    //               headers: {
+    //                 "Content-Type": "application/json",
+    //                 "Content-Length": data.length,
+    //               },
+    //             };
 
-                const req = https.request(options, (res) => {
-                  let responseData = "";
+    //             const req = https.request(options, (res) => {
+    //               let responseData = "";
 
-                  res.on("data", (chunk) => {
-                    responseData += chunk;
-                  });
+    //               res.on("data", (chunk) => {
+    //                 responseData += chunk;
+    //               });
 
-                  res.on("end", () => {
-                    // console.log("Response:", responseData);
-                  });
-                });
+    //               res.on("end", () => {
+    //                 // console.log("Response:", responseData);
+    //               });
+    //             });
 
-                req.on("error", (error) => {
-                  console.error("Error:", error);
-                });
+    //             req.on("error", (error) => {
+    //               console.error("Error:", error);
+    //             });
 
-                // Escribe los datos al cuerpo de la solicitud
-                req.write(data);
-                req.end();
+    //             // Escribe los datos al cuerpo de la solicitud
+    //             req.write(data);
+    //             req.end();
 
-                // await sock.sendMessage(
-                //   numberWa,
-                //   {
-                //     text: "whatsapp on",
-                //   },
-                //   {
-                //     quoted: messages[0],
-                //   }
-                // );
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.log("error ", error);
-      }
-    });
+    //             // await sock.sendMessage(
+    //             //   numberWa,
+    //             //   {
+    //             //     text: "whatsapp on",
+    //             //   },
+    //             //   {
+    //             //     quoted: messages[0],
+    //             //   }
+    //             // );
+    //           }
+    //         }
+    //       }
+    //     }
+    //   } catch (error) {
+    //     console.log("error ", error);
+    //   }
+    // });
   } catch (initialConnectionError) {
     console.error(
       "Error during initial WhatsApp connection:",
