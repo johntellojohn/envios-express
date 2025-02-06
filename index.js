@@ -20,6 +20,7 @@ const fileUpload = require("express-fileupload");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const app = require("express")();
+const moment = require("moment-timezone");
 
 /* Importaciones para registrar clientes */
 const connectToMongoDB = require("./functions/connect-mongodb");
@@ -233,38 +234,6 @@ app.post("/send-message/:id_externo", async (req, res) => {
           sockUser = WhatsAppSessions[id_externo]?.sock;
         }
 
-        // const exist = await sockUser.onWhatsApp(numberWA);
-
-        // if (exist?.jid || (exist && exist[0]?.jid)) {
-        //   try {
-        //     const result = await sockUser.sendMessage(
-        //       exist.jid || exist[0].jid,
-        //       {
-        //         text: tempMessage,
-        //       }
-        //     );
-        //     console.log({
-        //       De: "cliente-" + id_externo,
-        //       Para: numberWA,
-        //       Message: tempMessage,
-        //       Fecha: Date(),
-        //     });
-        //     return res.status(200).json({
-        //       status: true,
-        //       response: result,
-        //     });
-        //   } catch (err) {
-        //     return res.status(500).json({
-        //       status: false,
-        //       response: err,
-        //     });
-        //   }
-        // } else {
-        //   return res.status(404).json({
-        //     status: false,
-        //     response: "El número no está en WhatsApp",
-        //   });
-        // }
         const exist = await sockUser.onWhatsApp(numberWA);
 
         if (exist?.jid || (exist && exist[0]?.jid)) {
@@ -282,14 +251,15 @@ app.post("/send-message/:id_externo", async (req, res) => {
             const recipientJid = exist.jid || exist[0].jid;
             const recipientNumber = recipientJid.split("@")[0];
 
+            const fechaServidor = moment().tz('America/Guayaquil').format('YYYY-MM-DD HH:mm:ss');
+
             console.log({
               De: "cliente-" + id_externo,
               Para: numberWA,
               EnviadoPor: senderNumber,
               RecibidoPor: recipientNumber,
               Message: tempMessage,
-              Fecha: Date(),
-              EstadoEnvio: result,
+              Fecha: fechaServidor,
             });
 
             return res.status(200).json({
@@ -583,7 +553,7 @@ async function connectToWhatsApp(id_externo) {
           const senderNumber = isGroup
             ? messages[0].key.participant?.split("@")[0]
             : senderJid.split("@")[0]; // Maneja grupos y mensajes individuales
-          
+
           const reciberNumber = sock.user.id.split(":")[0];
 
           if (
@@ -694,7 +664,7 @@ async function connectToWhatsApp(id_externo) {
     });
   } catch (initialConnectionError) {
     console.error(
-      "Error during initial WhatsApp connection:",
+      "Error durante la inicializacion de la conexion WhatsApp:",
       initialConnectionError
     );
   }
@@ -731,7 +701,7 @@ app.post("/send-message-media/:id_externo", async (req, res) => {
 
         if (isConnected()) {
           const exist = await sockUser.onWhatsApp(numberWA);
-  
+
           if (exist?.jid || (exist && exist[0]?.jid)) {
             switch (type) {
               case "image":
@@ -845,7 +815,6 @@ app.post("/send-message-media/:id_externo", async (req, res) => {
             response: "Aun no estas conectado",
           });
         }
-
       }
     }
   } catch (err) {
