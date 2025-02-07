@@ -20,7 +20,7 @@ const fileUpload = require("express-fileupload");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const app = require("express")();
-const moment = require('moment-timezone');
+const moment = require("moment-timezone");
 
 /* Importaciones para registrar clientes */
 const connectToMongoDB = require("./functions/connect-mongodb");
@@ -38,7 +38,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 const server = require("http").createServer(app);
 const io = require("socket.io")(server);
-const port = process.env.PORT || 4030;
+const port = process.env.PORT || 4010;
 const qrcode = require("qrcode");
 
 // Variables para el sock
@@ -204,7 +204,9 @@ app.post("/send-message/:id_externo", async (req, res) => {
             const recipientJid = exist.jid || exist[0].jid;
             const recipientNumber = recipientJid.split("@")[0];
 
-            const fechaServidor = moment().tz('America/Guayaquil').format('YYYY-MM-DD HH:mm:ss');
+            const fechaServidor = moment()
+              .tz("America/Guayaquil")
+              .format("YYYY-MM-DD HH:mm:ss");
 
             console.log({
               De: "cliente-" + id_externo,
@@ -322,9 +324,9 @@ async function removeRegistro(id_externo) {
       if (WhatsAppSessions[id_externo].sock) {
         try {
           // Cerrar el socket de WhatsApp (de forma más robusta)
-          if (WhatsAppSessions[id_externo].sock.ws?.close) {
-            // Verifica si ws existe y tiene el método close
-            WhatsAppSessions[id_externo].sock.ws.close();
+          if (WhatsAppSessions[id_externo].sock.end) {
+            WhatsAppSessions[id_externo].sock.logout();
+            WhatsAppSessions[id_externo].sock.end();
             console.log(`Conexión cerrada para el ID ${id_externo}`);
           } else {
             console.log(
@@ -436,6 +438,9 @@ async function connectToWhatsApp(id_externo) {
 
         if (qr) {
           console.log(`QR generado para el usuario: ${id_externo}`);
+          WhatsAppSessions[id_externo] = {
+            sock: sock,
+          };
         }
 
         if (connection === "connecting") return;
@@ -445,10 +450,15 @@ async function connectToWhatsApp(id_externo) {
           const reason = lastDisconnect?.error?.output?.statusCode;
 
           if (reason !== DisconnectReason.loggedOut) {
-            // Introduce a delay before reconnecting to avoid rapid reconnect loops
             setTimeout(async () => {
-              await connectToWhatsApp(id_externo);
-            }, 5000); // 5 seconds delay - adjust as needed
+              if (WhatsAppSessions[id_externo]) {
+                await connectToWhatsApp(id_externo);
+              } else {
+                console.log(
+                  `Sesión eliminada para el ID ${id_externo}, no se reconectará.`
+                );
+              }
+            }, 5000);
           } else if (reason === DisconnectReason.loggedOut) {
             console.log(
               `Dispositivo cerrado. Elimine la sesión y escanee nuevamente.`
@@ -496,7 +506,6 @@ async function connectToWhatsApp(id_externo) {
     });
 
     sock.ev.on("creds.update", saveCreds);
-
   } catch (initialConnectionError) {
     console.error(
       "Error durante la inicializacion de la conexion WhatsApp:",
