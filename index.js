@@ -108,24 +108,25 @@ app.get("/registros", async (req, res) => {
 
 /* Endpoint para crear un nuevo usuario */
 app.post("/crear-usuario", async (req, res) => {
-  const { nombre, id_externo, descripcion } = req.body;
+  const { nombre, id_externo, descripcion, receive_messages } = req.body;
 
   try {
     const registroExistente = await getUserRecordByIdExterno(id_externo);
 
     if (!registroExistente) {
-      if (nombre && id_externo) {
+      if (nombre && id_externo && receive_messages) {
         const registros = db.collection("registros_whatsapp");
         const nuevoRegistro = {
           nombre,
           id_externo,
           descripcion,
           fechaCreacion: new Date(),
+          receive_messages,
         };
 
-        const insertResult = await registros.insertOne(nuevoRegistro);
+        await registros.insertOne(nuevoRegistro);
 
-        const sessionId = await connectToWhatsApp(id_externo);
+        const sessionId = await connectToWhatsApp(id_externo, receive_messages);
         nuevoRegistro.sock = sessionId;
 
         await updateUserRecord(id_externo, {
@@ -141,13 +142,14 @@ app.post("/crear-usuario", async (req, res) => {
       } else {
         res.status(400).send({
           result: false,
-          error: "Por favor, proporciona un nombre y un ID",
+          error:
+            "Por favor, proporciona un nombre, un identificador y si quieres enviar y recibir mensajes",
         });
       }
     } else {
       res.status(400).send({
         result: false,
-        error: "Ya existe un registro con el mismo ID",
+        error: "Ya existe un registro con el mismo identificador",
       });
     }
   } catch (err) {
@@ -177,13 +179,11 @@ app.post("/send-message/:id_externo", async (req, res) => {
       const sockUser = WhatsAppSessions[id_externo]?.sock;
 
       if (sockUser) {
-        // Verificamos el estado del sock
-        const estadoSock =
-          WhatsAppSessions[id_externo]?.sock?.ws?.socket?._readyState;
+        const estadoSock = sockUser?.ws?.socket?._readyState;
 
         if (estadoSock !== 1) {
           console.log("Implementando reconexión...");
-          await connectToWhatsApp(id_externo); // Llamar a la función de reconexión
+          await connectToWhatsApp(id_externo, receiveMessages);
           sockUser = WhatsAppSessions[id_externo]?.sock;
         }
 
@@ -320,28 +320,23 @@ async function removeRegistro(id_externo) {
   try {
     const sessionName = `session_auth_info_${id_externo}`;
 
-    if (WhatsAppSessions[id_externo]) {
-      if (WhatsAppSessions[id_externo].sock) {
-        try {
-          // Cerrar el socket de WhatsApp (de forma más robusta)
-          if (WhatsAppSessions[id_externo].sock.end) {
-            WhatsAppSessions[id_externo].sock.logout();
-            WhatsAppSessions[id_externo].sock.end();
-            console.log(`Conexión cerrada para el ID ${id_externo}`);
-          } else {
-            console.log(
-              `Socket para ${id_externo} parece estar ya cerrado o inválido.`
-            );
-          }
-        } catch (socketError) {
-          console.error(
-            `Error cerrando socket para ${id_externo}:`,
-            socketError
+    if (WhatsAppSessions[id_externo] && WhatsAppSessions[id_externo].sock) {
+      const sock = WhatsAppSessions[id_externo].sock;
+
+      try {
+        if (sock?.ws?.socket?._readyState === 1) {
+          sock.logout();
+          sock.end();
+          console.log(`Conexión cerrada para el ID ${id_externo}`);
+        } else {
+          console.log(
+            `Socket para ${id_externo} parece estar ya cerrado o inválido.`
           );
-        } finally {
-          // Asegura que la eliminación ocurra incluso si el cierre del socket falla
-          delete WhatsAppSessions[id_externo];
         }
+      } catch (socketError) {
+        console.error(`Error cerrando socket para ${id_externo}:`, socketError);
+      } finally {
+        delete WhatsAppSessions[id_externo];
       }
     }
 
@@ -371,11 +366,21 @@ async function removeRegistro(id_externo) {
       // Eliminar colección de sesión (de forma más robusta)
       const collections = await db
         .listCollections({ name: sessionName })
-        .toArray();
+        .toArray()
+        .catch((err) => {
+          throw new Error(`Error al listar colecciones: ${err.message}`);
+        });
 
       if (collections.length > 0) {
-        await db.collection(sessionName).drop();
-        console.log(`Colección ${sessionName} eliminada correctamente.`);
+        await db
+          .collection(sessionName)
+          .drop()
+          .then(() => {
+            console.log(`Colección ${sessionName} eliminada correctamente.`);
+          })
+          .catch((err) => {
+            throw new Error(`Error al eliminar colección: ${err.message}`);
+          });
       } else {
         console.log(`La colección ${sessionName} no existe.`);
       }
@@ -390,7 +395,7 @@ async function removeRegistro(id_externo) {
   }
 }
 
-async function connectToWhatsApp(id_externo) {
+async function connectToWhatsApp(id_externo, receiveMessages) {
   const sessionCollection = `session_auth_info_${id_externo}`;
   const collection_session = db.collection(sessionCollection);
 
@@ -452,7 +457,7 @@ async function connectToWhatsApp(id_externo) {
           if (reason !== DisconnectReason.loggedOut) {
             setTimeout(async () => {
               if (WhatsAppSessions[id_externo]) {
-                await connectToWhatsApp(id_externo);
+                await connectToWhatsApp(id_externo, receiveMessages);
               } else {
                 console.log(
                   `Sesión eliminada para el ID ${id_externo}, no se reconectará.`
@@ -485,7 +490,7 @@ async function connectToWhatsApp(id_externo) {
               `Reemplazando el socket existente para el id: ${id_externo}`
             );
             try {
-              WhatsAppSessions[id_externo].sock.end(); // Cierra el socket anterior. Maneja posibles errores.
+              WhatsAppSessions[id_externo].sock.end();
             } catch (socketEndError) {
               console.error(
                 `Error cerrando el socket anterior:`,
@@ -506,6 +511,127 @@ async function connectToWhatsApp(id_externo) {
     });
 
     sock.ev.on("creds.update", saveCreds);
+
+    if (receiveMessages) {
+      sock.ev.on("messages.upsert", async ({ messages, type }) => {
+        try {
+          if (type === "notify") {
+            const senderJid = messages[0].key.remoteJid;
+            const isGroup = senderJid.endsWith("@g.us"); // Verifica si es un grupo
+            const senderNumber = isGroup
+              ? messages[0].key.participant?.split("@")[0]
+              : senderJid.split("@")[0]; // Maneja grupos y mensajes individuales
+
+            const reciberNumber = sock.user.id.split(":")[0];
+
+            if (
+              !messages[0]?.key.fromMe &&
+              !messages[0].message?.protocolMessage?.disappearingMode &&
+              !messages[0].message?.protocolMessage?.ephemeralExpiration
+            ) {
+              //Validar msg viene en distinto lugar
+              let captureMessage = "vacio";
+              if (messages[0]?.message?.extendedTextMessage?.text) {
+                captureMessage =
+                  messages[0]?.message?.extendedTextMessage?.text;
+              } else if (messages[0]?.message?.conversation) {
+                captureMessage = messages[0]?.message?.conversation;
+              }
+
+              console.log(captureMessage);
+              if (captureMessage !== "vacio") {
+                const numberWa = messages[0]?.key?.remoteJid;
+
+                //extrar numero
+                const regexNumber = /(\d+)/;
+                const matchNumber = numberWa.match(regexNumber);
+                if (matchNumber) {
+                  phoneNumber = matchNumber[1];
+                } else {
+                  phoneNumber = "";
+                }
+
+                //Verificar si es usuario o grupo
+                const regex = /^.*@([sg]).*$/;
+                const match = numberWa.match(regex);
+                let cliente = false;
+                if (match) {
+                  switch (match[1]) {
+                    case "s":
+                      cliente = true;
+                      break;
+                    case "g":
+                      cliente = false;
+                      break;
+                    default:
+                      cliente = false;
+                      break;
+                  }
+                } else {
+                  cliente = false;
+                }
+
+                //Solo numero de Deyssi envios desde mi pc
+                const fetch = require("node-fetch");
+                // if (cliente && phoneNumber !== '' && phoneNumber == "593981773526") {
+                if (cliente && phoneNumber !== "") {
+                  // Preparar los datos a enviar al webhook
+                  const data = JSON.stringify({
+                    empresa: "sigcrm_clinicasancho",
+                    name: phoneNumber,
+                    senderNumber: senderNumber,
+                    reciberNumber: reciberNumber,
+                    description: captureMessage,
+                  });
+
+                  const options = {
+                    hostname: "sigcrm.pro",
+                    path: "/response-baileys",
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Content-Length": data.length,
+                    },
+                  };
+
+                  const req = https.request(options, (res) => {
+                    let responseData = "";
+
+                    res.on("data", (chunk) => {
+                      responseData += chunk;
+                    });
+
+                    res.on("end", () => {
+                      // console.log("Response:", responseData);
+                    });
+                  });
+
+                  req.on("error", (error) => {
+                    console.error("Error:", error);
+                  });
+
+                  // Escribe los datos al cuerpo de la solicitud
+                  req.write(data);
+                  req.end();
+
+                  // await sock.sendMessage(
+                  //   numberWa,
+                  //   {
+                  //     text: "whatsapp on",
+                  //   },
+                  //   {
+                  //     quoted: messages[0],
+                  //   }
+                  // );
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.log("error ", error);
+        }
+      });
+    }
   } catch (initialConnectionError) {
     console.error(
       "Error durante la inicializacion de la conexion WhatsApp:",
@@ -780,8 +906,9 @@ const startServer = async () => {
     } else {
       for (const registro of registros) {
         const id_externo = registro.id_externo;
+        const receiveMessages = registro.receive_messages;
 
-        await connectToWhatsApp(id_externo).catch((err) => {
+        await connectToWhatsApp(id_externo, receiveMessages).catch((err) => {
           console.log(`Error inesperado para id_externo ${id_externo}: ${err}`);
         });
       }
