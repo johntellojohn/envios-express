@@ -641,8 +641,10 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
 }
 
 //Enviar mensajes Multimedia type (image, video, audio, location)
-app.post("/send-message-media", async (req, res) => {
+app.post("/send-message-media/:id_externo", async (req, res) => {
   const { number, tempMessage, link, type, latitud, longitud } = req.body;
+  // const id_externo = req.params.id;
+  const { id_externo } = req.params;
 
   let numberWA;
   try {
@@ -656,121 +658,133 @@ app.post("/send-message-media", async (req, res) => {
 
       const sockUser = WhatsAppSessions[id_externo]?.sock;
 
-      if (isConnected()) {
-        const exist = await sockUser.onWhatsApp(numberWA);
+      if (sockUser) {
+        // Verificamos el estado del sock
+        const estadoSock =
+          WhatsAppSessions[id_externo]?.sock?.ws?.socket?._readyState;
 
-        if (exist?.jid || (exist && exist[0]?.jid)) {
-          switch (type) {
-            case "image":
-              sockUser
-                .sendMessage(exist.jid || exist[0].jid, {
-                  image: {
-                    url: link,
-                  },
-                  caption: tempMessage,
-                })
-                .then((result) => {
-                  res.status(200).json({
-                    status: true,
-                    response: result,
-                  });
-                })
-                .catch((err) => {
-                  res.status(500).json({
-                    status: false,
-                    response: err,
-                  });
-                });
-              break;
-            case "video":
-              sockUser
-                .sendMessage(exist.jid || exist[0].jid, {
-                  video: {
-                    url: link,
-                  },
-                  caption: tempMessage,
-                  gifPlayback: true,
-                  ptv: false,
-                })
-                .then((result) => {
-                  res.status(200).json({
-                    status: true,
-                    response: result,
-                  });
-                })
-                .catch((err) => {
-                  res.status(500).json({
-                    status: false,
-                    response: err,
-                  });
-                });
-              break;
-            case "audio":
-              sockUser
-                .sendMessage(exist.jid || exist[0].jid, {
-                  audio: {
-                    url: link,
-                  },
-                })
-                .then((result) => {
-                  res.status(200).json({
-                    status: true,
-                    response: result,
-                  });
-                })
-                .catch((err) => {
-                  res.status(500).json({
-                    status: false,
-                    response: err,
-                  });
-                });
-              break;
-            case "location":
-              sockUser
-                .sendMessage(exist.jid || exist[0].jid, {
-                  location: {
-                    degreesLatitude: latitud,
-                    degreesLongitude: longitud,
-                  },
-                })
-                .then((result) => {
-                  res.status(200).json({
-                    status: true,
-                    response: result,
-                  });
-                })
-                .catch((err) => {
-                  res.status(500).json({
-                    status: false,
-                    response: err,
-                  });
-                });
-              break;
-            default:
-              sockUser
-                .sendMessage(exist.jid || exist[0].jid, {
-                  text: tempMessage,
-                })
-                .then((result) => {
-                  res.status(200).json({
-                    status: true,
-                    response: result,
-                  });
-                })
-                .catch((err) => {
-                  res.status(500).json({
-                    status: false,
-                    response: err,
-                  });
-                });
-              break;
-          }
+        if (estadoSock !== 1) {
+          console.log("Implementando reconexión...");
+          await connectToWhatsApp(id_externo); // Llamar a la función de reconexión
+          sockUser = WhatsAppSessions[id_externo]?.sock;
         }
-      } else {
-        res.status(500).json({
-          status: false,
-          response: "Aun no estas conectado",
-        });
+
+        if (isConnected()) {
+          const exist = await sockUser.onWhatsApp(numberWA);
+
+          if (exist?.jid || (exist && exist[0]?.jid)) {
+            switch (type) {
+              case "image":
+                sockUser
+                  .sendMessage(exist.jid || exist[0].jid, {
+                    image: {
+                      url: link,
+                    },
+                    caption: tempMessage,
+                  })
+                  .then((result) => {
+                    res.status(200).json({
+                      status: true,
+                      response: result,
+                    });
+                  })
+                  .catch((err) => {
+                    res.status(500).json({
+                      status: false,
+                      response: err,
+                    });
+                  });
+                break;
+              case "video":
+                sockUser
+                  .sendMessage(exist.jid || exist[0].jid, {
+                    video: {
+                      url: link,
+                    },
+                    caption: tempMessage,
+                    gifPlayback: true,
+                    ptv: false,
+                  })
+                  .then((result) => {
+                    res.status(200).json({
+                      status: true,
+                      response: result,
+                    });
+                  })
+                  .catch((err) => {
+                    res.status(500).json({
+                      status: false,
+                      response: err,
+                    });
+                  });
+                break;
+              case "audio":
+                sockUser
+                  .sendMessage(exist.jid || exist[0].jid, {
+                    audio: {
+                      url: link,
+                    },
+                  })
+                  .then((result) => {
+                    res.status(200).json({
+                      status: true,
+                      response: result,
+                    });
+                  })
+                  .catch((err) => {
+                    res.status(500).json({
+                      status: false,
+                      response: err,
+                    });
+                  });
+                break;
+              case "location":
+                sockUser
+                  .sendMessage(exist.jid || exist[0].jid, {
+                    location: {
+                      degreesLatitude: latitud,
+                      degreesLongitude: longitud,
+                    },
+                  })
+                  .then((result) => {
+                    res.status(200).json({
+                      status: true,
+                      response: result,
+                    });
+                  })
+                  .catch((err) => {
+                    res.status(500).json({
+                      status: false,
+                      response: err,
+                    });
+                  });
+                break;
+              default:
+                sockUser
+                  .sendMessage(exist.jid || exist[0].jid, {
+                    text: tempMessage,
+                  })
+                  .then((result) => {
+                    res.status(200).json({
+                      status: true,
+                      response: result,
+                    });
+                  })
+                  .catch((err) => {
+                    res.status(500).json({
+                      status: false,
+                      response: err,
+                    });
+                  });
+                break;
+            }
+          }
+        } else {
+          res.status(500).json({
+            status: false,
+            response: "Aun no estas conectado",
+          });
+        }
       }
     }
   } catch (err) {
