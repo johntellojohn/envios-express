@@ -161,6 +161,49 @@ app.post("/crear-usuario", async (req, res) => {
   }
 });
 
+/* Endpoint para actualizar un registro */
+app.put("/actualizar-usuario/:id_externo", async (req, res) => {
+  const { id_externo } = req.params;
+  const { receive_messages } = req.body;
+
+  if (receive_messages === undefined) {
+    return res.status(400).json({
+      result: false,
+      error: "Se requiere el campo recibir mensajes(recive_messages)",
+    });
+  }
+
+  try {
+    const userRecord = await getUserRecordByIdExterno(id_externo);
+
+    if (!userRecord) {
+      return res.status(404).json({
+        result: false,
+        error: "No se encontró un usuario con el id_externo",
+      });
+    }
+
+    await updateUserRecord(id_externo, { receive_messages: receive_messages });
+
+    // Si es necesario, reiniciar la conexión de WhatsApp
+    if (receive_messages) {
+      const sessionId = await connectToWhatsApp(id_externo, receive_messages);
+      await updateUserRecord(id_externo, { sock: sessionId });
+    }
+
+    res.json({
+      result: true,
+      success: "El valor de receive_messages fue actualizado correctamente",
+    });
+  } catch (err) {
+    console.error("Error detallado:", err);
+    res.status(500).json({
+      result: false,
+      error: `Error al actualizar receive_messages: ${err.message}`,
+    });
+  }
+});
+
 /* Endpoint para realizar el envio de mensajes */
 app.post("/send-message/:id_externo", async (req, res) => {
   const { id_externo } = req.params;
