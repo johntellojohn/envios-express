@@ -11,7 +11,6 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const log = (pino = require("pino"));
-const { session } = { session: "session_auth_info" };
 const { Boom } = require("@hapi/boom");
 const path = require("path");
 const fs = require("fs");
@@ -114,7 +113,7 @@ app.post("/crear-usuario", async (req, res) => {
     const registroExistente = await getUserRecordByIdExterno(id_externo);
 
     if (!registroExistente) {
-      if (nombre && id_externo && receive_messages) {
+      if (nombre && id_externo && typeof receive_messages === "boolean") {
         const registros = db.collection("registros_whatsapp");
         const nuevoRegistro = {
           nombre,
