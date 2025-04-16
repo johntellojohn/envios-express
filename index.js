@@ -558,6 +558,38 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
       sock.ev.on("messages.upsert", async ({ messages, type }) => {
         try {
           if (type === "notify") {
+            /* PRUEBAS */
+            // const msg = messages[0];
+            // const senderJid2 = msg.key.remoteJid;
+            // const isGroups = senderJid2.endsWith("@g.us");
+
+            // let messageContent;
+
+            // let content = msg.message?.ephemeralMessage?.message || msg.message;
+
+            // if (content.conversation) {
+            //   console.log("Texto plano:", content.conversation);
+            // } else if (content.extendedTextMessage?.text) {
+            //   console.log("Texto extendido:", content.extendedTextMessage.text);
+            // } else if (content.imageMessage) {
+            //   console.log("Imagen recibida");
+            // } else if (content.audioMessage) {
+            //   console.log("Audio recibido");
+            // } else if (content.documentMessage) {
+            //   console.log("Documento recibido");
+            // } else if (content.stickerMessage) {
+            //   console.log("Sticker recibido");
+            // } else if (content.videoMessage) {
+            //   console.log("Video recibido");
+            // } else if (content.buttonsMessage) {
+            //   console.log("Mensaje con botones");
+            // } else if (content.templateMessage?.hydratedTemplate) {
+            //   console.log("Mensaje con botones (template)");
+            // } else {
+            //   console.log("Tipo de mensaje no identificado:", content);
+            // }
+            // return;
+            /* PRUEBAS */
             const senderJid = messages[0].key.remoteJid;
             const isGroup = senderJid.endsWith("@g.us"); // Verifica si es un grupo
             const senderNumber = isGroup
@@ -573,11 +605,14 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
             ) {
               //Validar msg viene en distinto lugar
               let captureMessage = "vacio";
-              if (messages[0]?.message?.extendedTextMessage?.text) {
-                captureMessage =
-                  messages[0]?.message?.extendedTextMessage?.text;
-              } else if (messages[0]?.message?.conversation) {
-                captureMessage = messages[0]?.message?.conversation;
+              let content =
+                messages[0]?.message?.ephemeralMessage?.message ||
+                messages[0]?.message;
+
+              if (content?.extendedTextMessage?.text) {
+                captureMessage = content?.extendedTextMessage?.text;
+              } else if (content?.conversation) {
+                captureMessage = content?.conversation;
               }
 
               console.log(captureMessage);
@@ -655,6 +690,8 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
                   // Escribe los datos al cuerpo de la solicitud
                   req.write(data);
                   req.end();
+
+                  // console.log(`[${new Date().toLocaleString()}] se debio enviar lo que se recibio`);
 
                   // await sock.sendMessage(
                   //   numberWa,

@@ -12,6 +12,7 @@ session_auth_info
 dist
 dist-ssr
 *.local
+.env
 
 # Editor directories and files
 .vscode/*
