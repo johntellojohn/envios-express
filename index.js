@@ -628,8 +628,8 @@ async function connectToWhatsApp(id_externo) {
                   path: "/response-baileys",
                   method: "POST",
                   headers: {
-                    "Content-Type": "application/json",
-                    "Content-Length": data.length,
+                    "Content-Type": "application/json; charset=utf-8", // Asegura codificación
+                    "Content-Length": Buffer.byteLength(data, 'utf8')   // Longitud real en UTF-8
                   },
                 };
 
