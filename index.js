@@ -661,15 +661,15 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
                     description: captureMessage,
                   });
 
-                  const options = {
-                    hostname: "sigcrm.pro",
-                    path: "/response-baileys",
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      "Content-Length": data.length,
-                    },
-                  };
+                const options = {
+                  hostname: "sigcrm.pro",
+                  path: "/response-baileys",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json; charset=utf-8", // Asegura codificación
+                    "Content-Length": Buffer.byteLength(data, 'utf8')   // Longitud real en UTF-8
+                  },
+                };
 
                   const req = https.request(options, (res) => {
                     let responseData = "";
