@@ -838,6 +838,29 @@ app.post("/send-message-media/:id_externo", async (req, res) => {
                     });
                   });
                 break;
+              case "document":
+                const fechaActual = new Date();
+                const año = fechaActual.getFullYear();
+                const mes = String(fechaActual.getMonth() + 1).padStart(2, "0");
+                const dia = String(fechaActual.getDate()).padStart(2, "0");
+                const nombreArchivo = `${año}-${mes}-${dia}.pdf`;
+              
+                sockUser
+                  .sendMessage(exist.jid || exist[0].jid, {
+                    document: {
+                      url: link,
+                      fileName: nombreArchivo,
+                      mimetype: "application/pdf",
+                    },
+                    caption: tempMessage,
+                  })
+                  .then((result) => {
+                    res.status(200).json({ status: true, response: result });
+                  })
+                  .catch((err) => {
+                    res.status(500).json({ status: false, response: err });
+                  });
+                break;
               default:
                 sockUser
                   .sendMessage(exist.jid || exist[0].jid, {
