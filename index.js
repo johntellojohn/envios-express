@@ -849,9 +849,9 @@ app.post("/send-message-media/:id_externo", async (req, res) => {
                   .sendMessage(exist.jid || exist[0].jid, {
                     document: {
                       url: link,
-                      fileName: nombreArchivo,
                       mimetype: "application/pdf",
                     },
+                    fileName: nombreArchivo,
                     caption: tempMessage,
                   })
                   .then((result) => {
