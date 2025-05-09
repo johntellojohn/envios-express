@@ -798,12 +798,9 @@ app.post("/send-message-media/:id_externo", async (req, res) => {
                   });
                 break;
               case "document":
-                const fechaActual = new Date();
-                const año = fechaActual.getFullYear();
-                const mes = String(fechaActual.getMonth() + 1).padStart(2, "0");
-                const dia = String(fechaActual.getDate()).padStart(2, "0");
-                const nombreArchivo = `${año}-${mes}-${dia}.pdf`;
-              
+                const pathname = new URL(link).pathname;
+                const nombreArchivo = decodeURIComponent(pathname.substring(pathname.lastIndexOf('/') + 1));
+
                 sockUser
                   .sendMessage(exist.jid || exist[0].jid, {
                     document: {
