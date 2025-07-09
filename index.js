@@ -22,6 +22,7 @@ const fileUpload = require("express-fileupload");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const app = require("express")();
+const moment = require("moment-timezone");
 
 /* Importaciones para registrar clientes */
 const connectToMongoDB = require("./functions/connect-mongodb");
@@ -39,7 +40,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 const server = require("http").createServer(app);
 const io = require("socket.io")(server);
-const port = process.env.PORT || 4030;
+const port = process.env.PORT || 4010;
 const qrcode = require("qrcode");
 
 // Variables para el sock
@@ -235,38 +236,6 @@ app.post("/send-message/:id_externo", async (req, res) => {
           sockUser = WhatsAppSessions[id_externo]?.sock;
         }
 
-        // const exist = await sockUser.onWhatsApp(numberWA);
-
-        // if (exist?.jid || (exist && exist[0]?.jid)) {
-        //   try {
-        //     const result = await sockUser.sendMessage(
-        //       exist.jid || exist[0].jid,
-        //       {
-        //         text: tempMessage,
-        //       }
-        //     );
-        //     console.log({
-        //       De: "cliente-" + id_externo,
-        //       Para: numberWA,
-        //       Message: tempMessage,
-        //       Fecha: Date(),
-        //     });
-        //     return res.status(200).json({
-        //       status: true,
-        //       response: result,
-        //     });
-        //   } catch (err) {
-        //     return res.status(500).json({
-        //       status: false,
-        //       response: err,
-        //     });
-        //   }
-        // } else {
-        //   return res.status(404).json({
-        //     status: false,
-        //     response: "El número no está en WhatsApp",
-        //   });
-        // }
         const exist = await sockUser.onWhatsApp(numberWA);
 
         if (exist?.jid || (exist && exist[0]?.jid)) {
@@ -284,14 +253,17 @@ app.post("/send-message/:id_externo", async (req, res) => {
             const recipientJid = exist.jid || exist[0].jid;
             const recipientNumber = recipientJid.split("@")[0];
 
+            const fechaServidor = moment()
+              .tz("America/Guayaquil")
+              .format("YYYY-MM-DD HH:mm:ss");
+
             console.log({
               De: "cliente-" + id_externo,
               Para: numberWA,
               EnviadoPor: senderNumber,
               RecibidoPor: recipientNumber,
               Message: tempMessage,
-              Fecha: Date(),
-              EstadoEnvio: result,
+              Fecha: fechaServidor,
             });
 
             return res.status(200).json({
@@ -401,10 +373,9 @@ async function removeRegistro(id_externo) {
     if (WhatsAppSessions[id_externo]) {
       if (WhatsAppSessions[id_externo].sock) {
         try {
-          // Cerrar el socket de WhatsApp (de forma más robusta)
-          if (WhatsAppSessions[id_externo].sock.ws?.close) {
-            // Verifica si ws existe y tiene el método close
-            WhatsAppSessions[id_externo].sock.ws.close();
+          if (WhatsAppSessions[id_externo].sock.end) {
+            WhatsAppSessions[id_externo].sock.logout();
+            WhatsAppSessions[id_externo].sock.end();
             console.log(`Conexión cerrada para el ID ${id_externo}`);
           } else {
             console.log(
@@ -417,7 +388,6 @@ async function removeRegistro(id_externo) {
             socketError
           );
         } finally {
-          // Asegura que la eliminación ocurra incluso si el cierre del socket falla
           delete WhatsAppSessions[id_externo];
         }
       }
@@ -516,6 +486,9 @@ async function connectToWhatsApp(id_externo) {
 
         if (qr) {
           console.log(`QR generado para el usuario: ${id_externo}`);
+          WhatsAppSessions[id_externo] = {
+            sock: sock,
+          };
         }
 
         if (connection === "connecting") return;
@@ -525,10 +498,15 @@ async function connectToWhatsApp(id_externo) {
           const reason = lastDisconnect?.error?.output?.statusCode;
 
           if (reason !== DisconnectReason.loggedOut) {
-            // Introduce a delay before reconnecting to avoid rapid reconnect loops
             setTimeout(async () => {
-              await connectToWhatsApp(id_externo);
-            }, 5000); // 5 seconds delay - adjust as needed
+              if (WhatsAppSessions[id_externo]) {
+                await connectToWhatsApp(id_externo);
+              } else {
+                console.log(
+                  `Sesión eliminada para el ID ${id_externo}, no se reconectará.`
+                );
+              }
+            }, 5000);
           } else if (reason === DisconnectReason.loggedOut) {
             console.log(
               `Dispositivo cerrado. Elimine la sesión y escanee nuevamente.`
@@ -605,6 +583,7 @@ async function connectToWhatsApp(id_externo) {
               let mediaFileName = null;
 
               if (messages[0]?.message?.extendedTextMessage?.text) {
+
               captureMessage = messages[0]?.message?.extendedTextMessage?.text;
             } else if (messages[0]?.message?.conversation) {
               captureMessage = messages[0]?.message?.conversation;
@@ -772,104 +751,17 @@ async function connectToWhatsApp(id_externo) {
     }
   } catch (initialConnectionError) {
     console.error(
-      "Error during initial WhatsApp connection:",
+      "Error durante la inicializacion de la conexion WhatsApp:",
       initialConnectionError
     );
   }
 }
 
-// async function connectToWhatsApp(id_externo) {
-//   const sessionCollection = `session_auth_info_${id_externo}`;
-//   const collection_session = db.collection(sessionCollection);
-
-//   const { state, saveCreds } = await mongoAuthState(collection_session);
-
-//   const sock = makeWASocket({
-//     printQRInTerminal: false,
-//     auth: state,
-//     logger: log({ level: "silent" }),
-//     qrTimeout: 60 * 1000,
-//   });
-
-//   sock.ev.on("connection.update", async (update) => {
-//     try {
-//       const { connection, lastDisconnect, qr } = update;
-//       let previousQR = update.qr;
-
-//       const userRecord = await getUserRecordByIdExterno(id_externo);
-
-//       if (userRecord) {
-//         if (userRecord.sock?.qr !== undefined && userRecord.sock?.qr !== null) {
-//           previousQR = userRecord.sock?.qr;
-//         }
-
-//         await updateUserRecord(id_externo, {
-//           sock: {
-//             connection: connection || null,
-//             lastDisconnect: lastDisconnect || null,
-//             qr: qr || previousQR || null,
-//           },
-//         });
-//       }
-
-//       if (qr) {
-//         console.log(`QR generado para el usuario: ${id_externo}`);
-//       }
-
-//       if (connection === "connecting") return;
-
-//       if (connection === "close") {
-//         console.log("Conexión cerrada detectada");
-//         // const reason = new Boom(lastDisconnect?.error).output?.statusCode;
-//         const reason = lastDisconnect?.error?.output?.statusCode;
-
-//         if (reason !== DisconnectReason.loggedOut) {
-//           await connectToWhatsApp(id_externo);
-//         } else if (reason === DisconnectReason.loggedOut) {
-//           console.log(
-//             `Dispositivo cerrado. Elimine ${session} y escanee nuevamente.`
-//           );
-//           await removeRegistro(id_externo);
-//         }
-//       } else if (connection === "open") {
-//         console.log(`conexión abierta para el id: ${id_externo}`);
-
-//         try {
-//           const userRecord = await getUserRecordByIdExterno(id_externo);
-//           if (userRecord) {
-//             await updateUserRecord(id_externo, { estado: "conectado" });
-//           }
-//         } catch (error) {
-//           console.error(
-//             `Error actualizando estado de conexión para ${id_externo}:`,
-//             error
-//           );
-//         }
-
-//         if (WhatsAppSessions[id_externo]) {
-//           console.log(
-//             `Reemplazando el socket existente para el id: ${id_externo}`
-//           );
-//           WhatsAppSessions[id_externo].sock.end(); // Cierra el socket anterior
-//         }
-
-//         WhatsAppSessions[id_externo] = {
-//           sock: sock,
-//         };
-
-//         return;
-//       }
-//     } catch (error) {
-//       console.error(`Error en connection.update para ${id_externo}:`, error);
-//     }
-//   });
-
-//   sock.ev.on("creds.update", saveCreds);
-// }
-
 //Enviar mensajes Multimedia type (image, video, audio, location)
-app.post("/send-message-media", async (req, res) => {
+app.post("/send-message-media/:id_externo", async (req, res) => {
   const { number, tempMessage, link, type, latitud, longitud } = req.body;
+  // const id_externo = req.params.id;
+  const { id_externo } = req.params;
 
   let numberWA;
   try {
@@ -883,121 +775,153 @@ app.post("/send-message-media", async (req, res) => {
 
       const sockUser = WhatsAppSessions[id_externo]?.sock;
 
-      if (isConnected()) {
-        const exist = await sockUser.onWhatsApp(numberWA);
+      if (sockUser) {
+        // Verificamos el estado del sock
+        const estadoSock =
+          WhatsAppSessions[id_externo]?.sock?.ws?.socket?._readyState;
 
-        if (exist?.jid || (exist && exist[0]?.jid)) {
-          switch (type) {
-            case "image":
-              sockUser
-                .sendMessage(exist.jid || exist[0].jid, {
-                  image: {
-                    url: link,
-                  },
-                  caption: tempMessage,
-                })
-                .then((result) => {
-                  res.status(200).json({
-                    status: true,
-                    response: result,
-                  });
-                })
-                .catch((err) => {
-                  res.status(500).json({
-                    status: false,
-                    response: err,
-                  });
-                });
-              break;
-            case "video":
-              sockUser
-                .sendMessage(exist.jid || exist[0].jid, {
-                  video: {
-                    url: link,
-                  },
-                  caption: tempMessage,
-                  gifPlayback: true,
-                  ptv: false,
-                })
-                .then((result) => {
-                  res.status(200).json({
-                    status: true,
-                    response: result,
-                  });
-                })
-                .catch((err) => {
-                  res.status(500).json({
-                    status: false,
-                    response: err,
-                  });
-                });
-              break;
-            case "audio":
-              sockUser
-                .sendMessage(exist.jid || exist[0].jid, {
-                  audio: {
-                    url: link,
-                  },
-                })
-                .then((result) => {
-                  res.status(200).json({
-                    status: true,
-                    response: result,
-                  });
-                })
-                .catch((err) => {
-                  res.status(500).json({
-                    status: false,
-                    response: err,
-                  });
-                });
-              break;
-            case "location":
-              sockUser
-                .sendMessage(exist.jid || exist[0].jid, {
-                  location: {
-                    degreesLatitude: latitud,
-                    degreesLongitude: longitud,
-                  },
-                })
-                .then((result) => {
-                  res.status(200).json({
-                    status: true,
-                    response: result,
-                  });
-                })
-                .catch((err) => {
-                  res.status(500).json({
-                    status: false,
-                    response: err,
-                  });
-                });
-              break;
-            default:
-              sockUser
-                .sendMessage(exist.jid || exist[0].jid, {
-                  text: tempMessage,
-                })
-                .then((result) => {
-                  res.status(200).json({
-                    status: true,
-                    response: result,
-                  });
-                })
-                .catch((err) => {
-                  res.status(500).json({
-                    status: false,
-                    response: err,
-                  });
-                });
-              break;
-          }
+        if (estadoSock !== 1) {
+          console.log("Implementando reconexión...");
+          await connectToWhatsApp(id_externo); // Llamar a la función de reconexión
+          sockUser = WhatsAppSessions[id_externo]?.sock;
         }
-      } else {
-        res.status(500).json({
-          status: false,
-          response: "Aun no estas conectado",
-        });
+
+        if (isConnected()) {
+          const exist = await sockUser.onWhatsApp(numberWA);
+
+          if (exist?.jid || (exist && exist[0]?.jid)) {
+            switch (type) {
+              case "image":
+                sockUser
+                  .sendMessage(exist.jid || exist[0].jid, {
+                    image: {
+                      url: link,
+                    },
+                    caption: tempMessage,
+                  })
+                  .then((result) => {
+                    res.status(200).json({
+                      status: true,
+                      response: result,
+                    });
+                  })
+                  .catch((err) => {
+                    res.status(500).json({
+                      status: false,
+                      response: err,
+                    });
+                  });
+                break;
+              case "video":
+                sockUser
+                  .sendMessage(exist.jid || exist[0].jid, {
+                    video: {
+                      url: link,
+                    },
+                    caption: tempMessage,
+                    gifPlayback: true,
+                    ptv: false,
+                  })
+                  .then((result) => {
+                    res.status(200).json({
+                      status: true,
+                      response: result,
+                    });
+                  })
+                  .catch((err) => {
+                    res.status(500).json({
+                      status: false,
+                      response: err,
+                    });
+                  });
+                break;
+              case "audio":
+                sockUser
+                  .sendMessage(exist.jid || exist[0].jid, {
+                    audio: {
+                      url: link,
+                    },
+                  })
+                  .then((result) => {
+                    res.status(200).json({
+                      status: true,
+                      response: result,
+                    });
+                  })
+                  .catch((err) => {
+                    res.status(500).json({
+                      status: false,
+                      response: err,
+                    });
+                  });
+                break;
+              case "location":
+                sockUser
+                  .sendMessage(exist.jid || exist[0].jid, {
+                    location: {
+                      degreesLatitude: latitud,
+                      degreesLongitude: longitud,
+                    },
+                  })
+                  .then((result) => {
+                    res.status(200).json({
+                      status: true,
+                      response: result,
+                    });
+                  })
+                  .catch((err) => {
+                    res.status(500).json({
+                      status: false,
+                      response: err,
+                    });
+                  });
+                break;
+              case "document":
+                const pathname = new URL(link).pathname;
+                const nombreArchivo = decodeURIComponent(pathname.substring(pathname.lastIndexOf('/') + 1));
+
+                sockUser
+                  .sendMessage(exist.jid || exist[0].jid, {
+                    document: {
+                      url: link,
+                      mimetype: "application/pdf",
+                    },
+                    fileName: nombreArchivo,
+                    caption: tempMessage,
+                  })
+                  .then((result) => {
+                    res.status(200).json({ status: true, response: result });
+                  })
+                  .catch((err) => {
+                    res.status(500).json({ status: false, response: err });
+                  });
+                break;
+              default:
+                sockUser
+                  .sendMessage(exist.jid || exist[0].jid, {
+                    text: tempMessage,
+                  })
+                  .then((result) => {
+                    res.status(200).json({
+                      status: true,
+                      response: result,
+                    });
+                  })
+                  .catch((err) => {
+                    res.status(500).json({
+                      status: false,
+                      response: err,
+                    });
+                  });
+                break;
+            }
+          }
+        } else {
+          res.status(500).json({
+            status: false,
+            response: "Aun no estas conectado",
+          });
+        }
       }
     }
   } catch (err) {
