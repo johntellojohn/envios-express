@@ -10,7 +10,7 @@ const https = require("https");
 
 const dotenv = require("dotenv");
 dotenv.config();
-// process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; //comentar en produccion
+//process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; //comentar en produccion
 
 const log = (pino = require("pino"));
 const { Boom } = require("@hapi/boom");
