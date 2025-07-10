@@ -570,7 +570,7 @@ async function connectToWhatsApp(id_externo) {
           if (
             !messages[0]?.key.fromMe &&
             !messages[0].message?.protocolMessage?.disappearingMode &&
-            !messages[0].message?.protocolMessage?.ephemeralExpiration &&
+            !messages[0].message?.protocolMessage?.ephemeralExpiration
             //senderNumber === reciberNumber //descomentar para local
           ) {
             //Validar msg viene en distinto lugar
