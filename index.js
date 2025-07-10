@@ -4,11 +4,13 @@ const {
   MessageOptions,
   Mimetype,
   DisconnectReason,
+  downloadContentFromMessage
 } = require("@whiskeysockets/baileys");
 const https = require("https");
 
 const dotenv = require("dotenv");
 dotenv.config();
+//process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; //comentar para produccion
 
 const log = (pino = require("pino"));
 const { session } = { session: "session_auth_info" };
@@ -38,7 +40,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 const server = require("http").createServer(app);
 const io = require("socket.io")(server);
-const port = process.env.PORT || 4010;
+const port = process.env.PORT || 1159; //4010
 const qrcode = require("qrcode");
 
 // Variables para el sock
@@ -555,6 +557,7 @@ async function connectToWhatsApp(id_externo) {
 
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
       try {
+        const msg = messages[0];
         if (type === "notify") {
           const senderJid = messages[0].key.remoteJid;
           const isGroup = senderJid.endsWith("@g.us"); // Verifica si es un grupo
@@ -567,18 +570,59 @@ async function connectToWhatsApp(id_externo) {
           if (
             !messages[0]?.key.fromMe &&
             !messages[0].message?.protocolMessage?.disappearingMode &&
-            !messages[0].message?.protocolMessage?.ephemeralExpiration
+            !messages[0].message?.protocolMessage?.ephemeralExpiration &&
+            //senderNumber === reciberNumber //descomentar para local
           ) {
             //Validar msg viene en distinto lugar
             let captureMessage = "vacio";
+            let originalWhatsAppMediaUrl  = null;
+            let mediaBuffer = null; //contenido binario real (bytes) del archivo multimedia de WhatsApp después de ser desencriptado por Baileys.
+            let mediaMimeType = null; //almacena el tipo de archivo real, Asigna la extensión correcta al archivo y Indica el Content-Type correcto al servicio de la nube
+            let base64Media = null;
+            let mediaFileName = null;
+
             if (messages[0]?.message?.extendedTextMessage?.text) {
               captureMessage = messages[0]?.message?.extendedTextMessage?.text;
             } else if (messages[0]?.message?.conversation) {
               captureMessage = messages[0]?.message?.conversation;
             }
 
+            // --- Media handling, decryption, and Base64 encoding ---
+            if (msg.message) {
+                try {
+                    if (msg.message.imageMessage) {
+                        mediaBuffer = await getBuffer(await downloadContentFromMessage(msg.message.imageMessage, 'image'));
+                        mediaMimeType = msg.message.imageMessage.mimetype;
+                        originalWhatsAppMediaUrl = msg.message.imageMessage.url || null;
+                        captureMessage = msg.message.imageMessage.caption || '';
+                        console.log(`[INFO] Image decrypted. Size: ${mediaBuffer.length} bytes. Type: ${mediaMimeType}`)
+                    } else if (msg.message.documentMessage) {
+                        mediaBuffer = await getBuffer(await downloadContentFromMessage(msg.message.documentMessage, 'document'));
+                        mediaMimeType = msg.message.documentMessage.mimetype;
+                        originalWhatsAppMediaUrl = msg.message.documentMessage.url || null;
+                        captureMessage = msg.message.documentMessage.caption || '';
+                        mediaFileName = msg.message.documentMessage.fileName || null;
+                        console.log(`[INFO] Document decrypted. Size: ${mediaBuffer.length} bytes. Type: ${mediaMimeType}`);
+                    }
+
+                    // Convert decrypted media buffer to Base64 if available
+                    if (mediaBuffer) {
+                        base64Media = mediaBuffer.toString('base64');
+                        console.log(`[INFO] Media content encoded to Base64. (Length: ${base64Media.length} chars)`);
+                    }
+
+                } catch (mediaDownloadError) {
+                    console.error("[ERROR] Failed to decrypt/download media:", mediaDownloadError);
+                    mediaBuffer = null;
+                    mediaMimeType = null;
+                    originalWhatsAppMediaUrl = null;
+                    base64Media = null;
+                    mediaFileName = null;
+                }
+            }
+
             console.log(captureMessage);
-            if (captureMessage !== "vacio") {
+            if (captureMessage !== "vacio"|| originalWhatsAppMediaUrl || mediaBuffer) {
               const numberWa = messages[0]?.key?.remoteJid;
 
               //extrar numero
@@ -621,7 +665,17 @@ async function connectToWhatsApp(id_externo) {
                   senderNumber: senderNumber,
                   reciberNumber: reciberNumber,
                   description: captureMessage,
+                  originalWhatsAppMediaUrl: originalWhatsAppMediaUrl || null, // Original encrypted CDN URL from WhatsApp
+                  mediaDataBase64: base64Media || null, // <<-- Base64 string of the decrypted file (NEW)
+                  mediaMimeType: mediaMimeType || null, // <<-- Actual MIME type (NEW)
+                  mediaFileName: mediaFileName || null, // <<-- Original file name (NEW)
+                  hasMediaContent: mediaBuffer !== null, // <<-- Boolean flag indicating if decrypted media is present (NEW)
                 });
+
+                console.log("------------------- JSON ENVIADO A SIGCRM.PRO -------------------");
+                console.log(data); // <<< AÑADE ESTA LÍNEA PARA VER EL JSON COMPLETO
+                console.log("-----------------------------------------------------------------------------------------");
+
 
                 const options = {
                   hostname: "sigcrm.pro",
@@ -632,6 +686,14 @@ async function connectToWhatsApp(id_externo) {
                     "Content-Length": Buffer.byteLength(data, 'utf8')   // Longitud real en UTF-8
                   },
                 };
+                //   hostname: "clinicasancho.eva.com", 
+                //   path: "/response-baileys",
+                //   method: "POST",
+                //   headers: {
+                //     "Content-Type": "application/json; charset=utf-8",
+                //     "Content-Length": Buffer.byteLength(data, 'utf8')
+                //   },
+                // };
 
                 const req = https.request(options, (res) => {
                   let responseData = "";
@@ -662,7 +724,13 @@ async function connectToWhatsApp(id_externo) {
                 //     quoted: messages[0],
                 //   }
                 // );
+
+                if (base64Media) {
+                    console.log("[INFO] Decrypted media (Base64) sent to sigcrm.pro.");
+                }
               }
+            } else {
+                console.log(`[INFO] Message ignored (empty or no relevant content): ${senderNumber}`);
             }
           }
         }
@@ -964,6 +1032,15 @@ async function getUserRecordByIdExterno(id_externo) {
 
 async function getUserRecords() {
   return await whatsapp_registros.find().toArray();
+}
+
+async function getBuffer(stream) {
+  return new Promise((resolve, reject) => {
+      const chunks = [];
+      stream.on('data', chunk => chunks.push(chunk));
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+      stream.on('error', reject);
+  });
 }
 
 const startServer = async () => {
