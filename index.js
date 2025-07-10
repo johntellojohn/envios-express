@@ -678,22 +678,22 @@ async function connectToWhatsApp(id_externo) {
 
 
                 const options = {
-                //   hostname: "sigcrm.pro",
+                  hostname: "sigcrm.pro",
+                  path: "/response-baileys",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json; charset=utf-8", // Asegura codificación
+                    "Content-Length": Buffer.byteLength(data, 'utf8')   // Longitud real en UTF-8
+                  },
+                };
+                //   hostname: "clinicasancho.eva.com", 
                 //   path: "/response-baileys",
                 //   method: "POST",
                 //   headers: {
-                //     "Content-Type": "application/json; charset=utf-8", // Asegura codificación
-                //     "Content-Length": Buffer.byteLength(data, 'utf8')   // Longitud real en UTF-8
+                //     "Content-Type": "application/json; charset=utf-8",
+                //     "Content-Length": Buffer.byteLength(data, 'utf8')
                 //   },
                 // };
-                  hostname: "clinicasancho.eva.com", // <<-- NUEVO HOSTNAME
-                  path: "/response-baileys", // <<-- NUEVO PATH (Ej: /abc-123-xyz-456)
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json; charset=utf-8",
-                    "Content-Length": Buffer.byteLength(data, 'utf8')
-                  },
-                };
 
                 const req = https.request(options, (res) => {
                   let responseData = "";
