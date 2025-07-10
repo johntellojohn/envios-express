@@ -10,9 +10,10 @@ const https = require("https");
 
 const dotenv = require("dotenv");
 dotenv.config();
-//process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; //comentar en produccion
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; //comentar para produccion
 
 const log = (pino = require("pino"));
+const { session } = { session: "session_auth_info" };
 const { Boom } = require("@hapi/boom");
 const path = require("path");
 const fs = require("fs");
@@ -39,7 +40,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 const server = require("http").createServer(app);
 const io = require("socket.io")(server);
-const port = process.env.PORT || 4010;
+const port = process.env.PORT || 4010; //1159
 const qrcode = require("qrcode");
 
 // Variables para el sock
@@ -109,25 +110,24 @@ app.get("/registros", async (req, res) => {
 
 /* Endpoint para crear un nuevo usuario */
 app.post("/crear-usuario", async (req, res) => {
-  const { nombre, id_externo, descripcion, receive_messages } = req.body;
+  const { nombre, id_externo, descripcion } = req.body;
 
   try {
     const registroExistente = await getUserRecordByIdExterno(id_externo);
 
     if (!registroExistente) {
-      if (nombre && id_externo && typeof receive_messages === "boolean") {
+      if (nombre && id_externo) {
         const registros = db.collection("registros_whatsapp");
         const nuevoRegistro = {
           nombre,
           id_externo,
           descripcion,
           fechaCreacion: new Date(),
-          receive_messages,
         };
 
-        await registros.insertOne(nuevoRegistro);
+        const insertResult = await registros.insertOne(nuevoRegistro);
 
-        const sessionId = await connectToWhatsApp(id_externo, receive_messages);
+        const sessionId = await connectToWhatsApp(id_externo);
         nuevoRegistro.sock = sessionId;
 
         await updateUserRecord(id_externo, {
@@ -143,14 +143,13 @@ app.post("/crear-usuario", async (req, res) => {
       } else {
         res.status(400).send({
           result: false,
-          error:
-            "Por favor, proporciona un nombre, un identificador y si quieres enviar y recibir mensajes",
+          error: "Por favor, proporciona un nombre y un ID",
         });
       }
     } else {
       res.status(400).send({
         result: false,
-        error: "Ya existe un registro con el mismo identificador",
+        error: "Ya existe un registro con el mismo ID",
       });
     }
   } catch (err) {
@@ -162,45 +161,49 @@ app.post("/crear-usuario", async (req, res) => {
   }
 });
 
-/* Endpoint para actualizar un registro */
-app.put("/actualizar-usuario/:id_externo", async (req, res) => {
-  const { id_externo } = req.params;
-  const { receive_messages } = req.body;
+/* Endpoint para activar el envio de mensajes para el usuario creado */
+app.post("/activar-usuario", async (req, res) => {
+  const { id_externo } = req.body;
 
-  if (receive_messages === undefined) {
-    return res.status(400).json({
-      result: false,
-      error: "Se requiere el campo recibir mensajes(recive_messages)",
-    });
-  }
+  if (id_externo) {
+    try {
+      const filePath = path.join(
+        __dirname,
+        `functions/clientes_whatsapp/${id_externo}.js`
+      );
 
-  try {
-    const userRecord = await getUserRecordByIdExterno(id_externo);
+      const createdFunction = require(filePath);
 
-    if (!userRecord) {
-      return res.status(404).json({
+      const connected = await isConnected(id_externo);
+      const sockUser = WhatsAppSessions[id_externo]?.sock;
+
+      if (!sockUser) {
+        return res.status(404).send({
+          result: false,
+          success: "",
+          error: `No se encontró sock para el usuario con id_externo: ${id_externo}.`,
+        });
+      }
+
+      // Envia la informacion correspondiente del usuario para mensajes
+      const result = await createdFunction(app, connected, sockUser, db);
+
+      res.send({ result });
+    } catch (error) {
+      console.error("Error al ejecutar la función:", error);
+      res.status(500).send({
         result: false,
-        error: "No se encontró un usuario con el id_externo",
+        success: "",
+        error: "Error al ejecutar la función",
       });
     }
-
-    await updateUserRecord(id_externo, { receive_messages: receive_messages });
-
-    // Si es necesario, reiniciar la conexión de WhatsApp
-    if (receive_messages) {
-      const sessionId = await connectToWhatsApp(id_externo, receive_messages);
-      await updateUserRecord(id_externo, { sock: sessionId });
-    }
-
-    res.json({
-      result: true,
-      success: "El valor de receive_messages fue actualizado correctamente",
-    });
-  } catch (err) {
-    console.error("Error detallado:", err);
-    res.status(500).json({
+  } else {
+    const sms = "Por favor, proporciona el id y un parámetro";
+    console.log(sms);
+    res.status(400).send({
       result: false,
-      error: `Error al actualizar receive_messages: ${err.message}`,
+      success: "",
+      error: sms,
     });
   }
 });
@@ -223,11 +226,13 @@ app.post("/send-message/:id_externo", async (req, res) => {
       const sockUser = WhatsAppSessions[id_externo]?.sock;
 
       if (sockUser) {
-        const estadoSock = sockUser?.ws?.socket?._readyState;
+        // Verificamos el estado del sock
+        const estadoSock =
+          WhatsAppSessions[id_externo]?.sock?.ws?.socket?._readyState;
 
         if (estadoSock !== 1) {
           console.log("Implementando reconexión...");
-          await connectToWhatsApp(id_externo, receiveMessages);
+          await connectToWhatsApp(id_externo); // Llamar a la función de reconexión
           sockUser = WhatsAppSessions[id_externo]?.sock;
         }
 
@@ -256,6 +261,7 @@ app.post("/send-message/:id_externo", async (req, res) => {
               De: "cliente-" + id_externo,
               Para: numberWA,
               EnviadoPor: senderNumber,
+              RecibidoPor: recipientNumber,
               Message: tempMessage,
               Fecha: fechaServidor,
             });
@@ -364,23 +370,26 @@ async function removeRegistro(id_externo) {
   try {
     const sessionName = `session_auth_info_${id_externo}`;
 
-    if (WhatsAppSessions[id_externo] && WhatsAppSessions[id_externo].sock) {
-      const sock = WhatsAppSessions[id_externo].sock;
-
-      try {
-        if (sock?.ws?.socket?._readyState === 1) {
-          sock.logout();
-          sock.end();
-          console.log(`Conexión cerrada para el ID ${id_externo}`);
-        } else {
-          console.log(
-            `Socket para ${id_externo} parece estar ya cerrado o inválido.`
+    if (WhatsAppSessions[id_externo]) {
+      if (WhatsAppSessions[id_externo].sock) {
+        try {
+          if (WhatsAppSessions[id_externo].sock.end) {
+            WhatsAppSessions[id_externo].sock.logout();
+            WhatsAppSessions[id_externo].sock.end();
+            console.log(`Conexión cerrada para el ID ${id_externo}`);
+          } else {
+            console.log(
+              `Socket para ${id_externo} parece estar ya cerrado o inválido.`
+            );
+          }
+        } catch (socketError) {
+          console.error(
+            `Error cerrando socket para ${id_externo}:`,
+            socketError
           );
+        } finally {
+          delete WhatsAppSessions[id_externo];
         }
-      } catch (socketError) {
-        console.error(`Error cerrando socket para ${id_externo}:`, socketError);
-      } finally {
-        delete WhatsAppSessions[id_externo];
       }
     }
 
@@ -410,21 +419,11 @@ async function removeRegistro(id_externo) {
       // Eliminar colección de sesión (de forma más robusta)
       const collections = await db
         .listCollections({ name: sessionName })
-        .toArray()
-        .catch((err) => {
-          throw new Error(`Error al listar colecciones: ${err.message}`);
-        });
+        .toArray();
 
       if (collections.length > 0) {
-        await db
-          .collection(sessionName)
-          .drop()
-          .then(() => {
-            console.log(`Colección ${sessionName} eliminada correctamente.`);
-          })
-          .catch((err) => {
-            throw new Error(`Error al eliminar colección: ${err.message}`);
-          });
+        await db.collection(sessionName).drop();
+        console.log(`Colección ${sessionName} eliminada correctamente.`);
       } else {
         console.log(`La colección ${sessionName} no existe.`);
       }
@@ -439,7 +438,7 @@ async function removeRegistro(id_externo) {
   }
 }
 
-async function connectToWhatsApp(id_externo, receiveMessages) {
+async function connectToWhatsApp(id_externo) {
   const sessionCollection = `session_auth_info_${id_externo}`;
   const collection_session = db.collection(sessionCollection);
 
@@ -501,7 +500,7 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
           if (reason !== DisconnectReason.loggedOut) {
             setTimeout(async () => {
               if (WhatsAppSessions[id_externo]) {
-                await connectToWhatsApp(id_externo, receiveMessages);
+                await connectToWhatsApp(id_externo);
               } else {
                 console.log(
                   `Sesión eliminada para el ID ${id_externo}, no se reconectará.`
@@ -534,7 +533,7 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
               `Reemplazando el socket existente para el id: ${id_externo}`
             );
             try {
-              WhatsAppSessions[id_externo].sock.end();
+              WhatsAppSessions[id_externo].sock.end(); // Cierra el socket anterior. Maneja posibles errores.
             } catch (socketEndError) {
               console.error(
                 `Error cerrando el socket anterior:`,
@@ -556,81 +555,37 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
 
     sock.ev.on("creds.update", saveCreds);
 
-    if (receiveMessages) {
-      sock.ev.on("messages.upsert", async ({ messages, type }) => {
-        try {
+    sock.ev.on("messages.upsert", async ({ messages, type }) => {
+      try {
         const msg = messages[0];
-          if (type === "notify") {
-            /* PRUEBAS */
-            // const msg = messages[0];
-            // const senderJid2 = msg.key.remoteJid;
-            // const isGroups = senderJid2.endsWith("@g.us");
+        if (type === "notify") {
+          const senderJid = messages[0].key.remoteJid;
+          const isGroup = senderJid.endsWith("@g.us"); // Verifica si es un grupo
+          const senderNumber = isGroup
+            ? messages[0].key.participant?.split("@")[0]
+            : senderJid.split("@")[0]; // Maneja grupos y mensajes individuales
 
-            // let messageContent;
+          const reciberNumber = sock.user.id.split(":")[0];
 
-            // let content = msg.message?.ephemeralMessage?.message || msg.message;
+          if (
+            // !messages[0]?.key.fromMe &&
+            !messages[0].message?.protocolMessage?.disappearingMode &&
+            !messages[0].message?.protocolMessage?.ephemeralExpiration &&
+            senderNumber === reciberNumber
+          ) {
+            //Validar msg viene en distinto lugar
+            let captureMessage = "vacio";
+            let originalWhatsAppMediaUrl  = null;
+            let mediaBuffer = null; //contenido binario real (bytes) del archivo multimedia de WhatsApp después de ser desencriptado por Baileys.
+            let mediaMimeType = null; //almacena el tipo de archivo real, Asigna la extensión correcta al archivo y Indica el Content-Type correcto al servicio de la nube
+            let base64Media = null;
+            let mediaFileName = null;
 
-            // if (content.conversation) {
-            //   console.log("Texto plano:", content.conversation);
-            // } else if (content.extendedTextMessage?.text) {
-            //   console.log("Texto extendido:", content.extendedTextMessage.text);
-            // } else if (content.imageMessage) {
-            //   console.log("Imagen recibida");
-            // } else if (content.audioMessage) {
-            //   console.log("Audio recibido");
-            // } else if (content.documentMessage) {
-            //   console.log("Documento recibido");
-            // } else if (content.stickerMessage) {
-            //   console.log("Sticker recibido");
-            // } else if (content.videoMessage) {
-            //   console.log("Video recibido");
-            // } else if (content.buttonsMessage) {
-            //   console.log("Mensaje con botones");
-            // } else if (content.templateMessage?.hydratedTemplate) {
-            //   console.log("Mensaje con botones (template)");
-            // } else {
-            //   console.log("Tipo de mensaje no identificado:", content);
-            // }
-            // return;
-            /* PRUEBAS */
-            const senderJid = messages[0].key.remoteJid;
-            const isGroup = senderJid.endsWith("@g.us"); // Verifica si es un grupo
-            const senderNumber = isGroup
-              ? messages[0].key.participant?.split("@")[0]
-              : senderJid.split("@")[0]; // Maneja grupos y mensajes individuales
-
-            const reciberNumber = sock.user.id.split(":")[0];
-
-            if (
-              !messages[0]?.key.fromMe &&
-              !messages[0].message?.protocolMessage?.disappearingMode &&
-              !messages[0].message?.protocolMessage?.ephemeralExpiration
-              //senderNumber === reciberNumber
-            ) {
-              //Validar msg viene en distinto lugar
-              let captureMessage = "vacio";
-              let originalWhatsAppMediaUrl = null;
-              let mediaBuffer = null; //contenido binario real (bytes) del archivo multimedia de WhatsApp después de ser desencriptado por Baileys.
-              let mediaMimeType = null; //almacena el tipo de archivo real, Asigna la extensión correcta al archivo y Indica el Content-Type correcto al servicio de la nube
-              let base64Media = null;
-              let mediaFileName = null;
-
-              if (messages[0]?.message?.extendedTextMessage?.text) {
+            if (messages[0]?.message?.extendedTextMessage?.text) {
               captureMessage = messages[0]?.message?.extendedTextMessage?.text;
             } else if (messages[0]?.message?.conversation) {
               captureMessage = messages[0]?.message?.conversation;
             }
-
-              // let content =
-              //   messages[0]?.message?.ephemeralMessage?.message ||
-              //   messages[0]?.message;
-
-              // if (content?.extendedTextMessage?.text) {
-              //   captureMessage = content?.extendedTextMessage?.text;
-              // } else if (content?.conversation) {
-              //   captureMessage = content?.conversation;
-              // }
-
 
             // --- Media handling, decryption, and Base64 encoding ---
             if (msg.message) {
@@ -640,7 +595,7 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
                         mediaMimeType = msg.message.imageMessage.mimetype;
                         originalWhatsAppMediaUrl = msg.message.imageMessage.url || null;
                         captureMessage = msg.message.imageMessage.caption || '';
-                        console.log(`[INFO] Image decrypted. Size: ${mediaBuffer.length} bytes. Type: ${mediaMimeType}`);
+                        console.log(`[INFO] Image decrypted. Size: ${mediaBuffer.length} bytes. Type: ${mediaMimeType}`)
                     } else if (msg.message.documentMessage) {
                         mediaBuffer = await getBuffer(await downloadContentFromMessage(msg.message.documentMessage, 'document'));
                         mediaMimeType = msg.message.documentMessage.mimetype;
@@ -648,7 +603,7 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
                         captureMessage = msg.message.documentMessage.caption || '';
                         mediaFileName = msg.message.documentMessage.fileName || null;
                         console.log(`[INFO] Document decrypted. Size: ${mediaBuffer.length} bytes. Type: ${mediaMimeType}`);
-                    } 
+                    }
 
                     // Convert decrypted media buffer to Base64 if available
                     if (mediaBuffer) {
@@ -670,34 +625,34 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
             if (captureMessage !== "vacio"|| originalWhatsAppMediaUrl || mediaBuffer) {
               const numberWa = messages[0]?.key?.remoteJid;
 
-                //extrar numero
-                const regexNumber = /(\d+)/;
-                const matchNumber = numberWa.match(regexNumber);
-                if (matchNumber) {
-                  phoneNumber = matchNumber[1];
-                } else {
-                  phoneNumber = "";
-                }
+              //extrar numero
+              const regexNumber = /(\d+)/;
+              const matchNumber = numberWa.match(regexNumber);
+              if (matchNumber) {
+                phoneNumber = matchNumber[1];
+              } else {
+                phoneNumber = "";
+              }
 
-                //Verificar si es usuario o grupo
-                const regex = /^.*@([sg]).*$/;
-                const match = numberWa.match(regex);
-                let cliente = false;
-                if (match) {
-                  switch (match[1]) {
-                    case "s":
-                      cliente = true;
-                      break;
-                    case "g":
-                      cliente = false;
-                      break;
-                    default:
-                      cliente = false;
-                      break;
-                  }
-                } else {
-                  cliente = false;
+              //Verificar si es usuario o grupo
+              const regex = /^.*@([sg]).*$/;
+              const match = numberWa.match(regex);
+              let cliente = false;
+              if (match) {
+                switch (match[1]) {
+                  case "s":
+                    cliente = true;
+                    break;
+                  case "g":
+                    cliente = false;
+                    break;
+                  default:
+                    cliente = false;
+                    break;
                 }
+              } else {
+                cliente = false;
+              }
 
               //Solo numero de Deyssi envios desde mi pc
               const fetch = require("node-fetch");
@@ -717,70 +672,72 @@ async function connectToWhatsApp(id_externo, receiveMessages) {
                   hasMediaContent: mediaBuffer !== null, // <<-- Boolean flag indicating if decrypted media is present (NEW)
                 });
 
+                console.log("------------------- JSON ENVIADO A SIGCRM.PRO -------------------");
+                console.log(data); // <<< AÑADE ESTA LÍNEA PARA VER EL JSON COMPLETO
+                console.log("-----------------------------------------------------------------------------------------");
+
 
                 const options = {
-                  hostname: "sigcrm.pro",
-                  path: "/response-baileys",
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json; charset=utf-8", // Asegura codificación
-                    "Content-Length": Buffer.byteLength(data, 'utf8')   // Longitud real en UTF-8
-                  },
-                };
-                //para servidor de pruebas locales
-                //   hostname: "clinicasancho.eva.com", 
+                //   hostname: "sigcrm.pro",
                 //   path: "/response-baileys",
                 //   method: "POST",
                 //   headers: {
-                //     "Content-Type": "application/json; charset=utf-8",
-                //     "Content-Length": Buffer.byteLength(data, 'utf8')
+                //     "Content-Type": "application/json; charset=utf-8", // Asegura codificación
+                //     "Content-Length": Buffer.byteLength(data, 'utf8')   // Longitud real en UTF-8
                 //   },
                 // };
+                  hostname: "clinicasancho.eva.com", // <<-- NUEVO HOSTNAME
+                  path: "/response-baileys", // <<-- NUEVO PATH (Ej: /abc-123-xyz-456)
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Content-Length": Buffer.byteLength(data, 'utf8')
+                  },
+                };
 
-                  const req = https.request(options, (res) => {
-                    let responseData = "";
+                const req = https.request(options, (res) => {
+                  let responseData = "";
 
-                    res.on("data", (chunk) => {
-                      responseData += chunk;
-                    });
-
-                    res.on("end", () => {
-                      // console.log("Response:", responseData);
-                    });
+                  res.on("data", (chunk) => {
+                    responseData += chunk;
                   });
 
-                  req.on("error", (error) => {
-                    console.error("Error:", error);
+                  res.on("end", () => {
+                    // console.log("Response:", responseData);
                   });
+                });
+
+                req.on("error", (error) => {
+                  console.error("Error:", error);
+                });
 
                 // Escribe los datos al cuerpo de la solicitud
                 req.write(data);
                 req.end();
 
-                  // await sock.sendMessage(
-                  //   numberWa,
-                  //   {
-                  //     text: "whatsapp on",
-                  //   },
-                  //   {
-                  //     quoted: messages[0],
-                  //   }
-                  // );
-  
+                // await sock.sendMessage(
+                //   numberWa,
+                //   {
+                //     text: "whatsapp on",
+                //   },
+                //   {
+                //     quoted: messages[0],
+                //   }
+                // );
+
                 if (base64Media) {
                     console.log("[INFO] Decrypted media (Base64) sent to sigcrm.pro.");
                 }
-                }
+              }
             } else {
                 console.log(`[INFO] Message ignored (empty or no relevant content): ${senderNumber}`);
             }
-            }
           }
-        } catch (error) {
-          console.log("error ", error);
         }
-      });
-    }
+      } catch (error) {
+        console.log("error ", error);
+      }
+    });
   } catch (initialConnectionError) {
     console.error(
       "Error durante la inicializacion de la conexion WhatsApp:",
@@ -1078,12 +1035,12 @@ async function getUserRecords() {
 }
 
 async function getBuffer(stream) {
-    return new Promise((resolve, reject) => {
-        const chunks = [];
-        stream.on('data', chunk => chunks.push(chunk));
-        stream.on('end', () => resolve(Buffer.concat(chunks)));
-        stream.on('error', reject);
-    });
+  return new Promise((resolve, reject) => {
+      const chunks = [];
+      stream.on('data', chunk => chunks.push(chunk));
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+      stream.on('error', reject);
+  });
 }
 
 const startServer = async () => {
@@ -1098,9 +1055,8 @@ const startServer = async () => {
     } else {
       for (const registro of registros) {
         const id_externo = registro.id_externo;
-        const receiveMessages = registro.receive_messages;
 
-        await connectToWhatsApp(id_externo, receiveMessages).catch((err) => {
+        await connectToWhatsApp(id_externo).catch((err) => {
           console.log(`Error inesperado para id_externo ${id_externo}: ${err}`);
         });
       }
