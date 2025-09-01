@@ -10,7 +10,7 @@ const https = require("https");
 
 const dotenv = require("dotenv");
 dotenv.config();
-//process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; //comentar para produccion
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; //comentar para produccion
 
 const log = (pino = require("pino"));
 const { session } = { session: "session_auth_info" };
@@ -40,7 +40,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 const server = require("http").createServer(app);
 const io = require("socket.io")(server);
-const port = process.env.PORT || 1159; //4010
+const port = process.env.PORT || 4010; //4010
 const qrcode = require("qrcode");
 
 // Variables para el sock
@@ -568,10 +568,10 @@ async function connectToWhatsApp(id_externo) {
           const reciberNumber = sock.user.id.split(":")[0];
 
           if (
-            !messages[0]?.key.fromMe &&
+            //!messages[0]?.key.fromMe &&
             !messages[0].message?.protocolMessage?.disappearingMode &&
             !messages[0].message?.protocolMessage?.ephemeralExpiration &&
-            //senderNumber === reciberNumber //descomentar para local
+            senderNumber === reciberNumber //descomentar para local
           ) {
             //Validar msg viene en distinto lugar
             let captureMessage = "vacio";
@@ -678,22 +678,22 @@ async function connectToWhatsApp(id_externo) {
 
 
                 const options = {
-                  hostname: "sigcrm.pro",
-                  path: "/response-baileys",
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json; charset=utf-8", // Asegura codificación
-                    "Content-Length": Buffer.byteLength(data, 'utf8')   // Longitud real en UTF-8
-                  },
-                };
-                //   hostname: "clinicasancho.eva.com", 
+                //   hostname: "sigcrm.pro",
                 //   path: "/response-baileys",
                 //   method: "POST",
                 //   headers: {
-                //     "Content-Type": "application/json; charset=utf-8",
-                //     "Content-Length": Buffer.byteLength(data, 'utf8')
+                //     "Content-Type": "application/json; charset=utf-8", // Asegura codificación
+                //     "Content-Length": Buffer.byteLength(data, 'utf8')   // Longitud real en UTF-8
                 //   },
                 // };
+                  hostname: "clinicasancho.eva.com", 
+                  path: "/response-baileys",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Content-Length": Buffer.byteLength(data, 'utf8')
+                  },
+                };
 
                 const req = https.request(options, (res) => {
                   let responseData = "";

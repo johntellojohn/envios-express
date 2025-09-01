@@ -13,7 +13,7 @@ const connectToMongoDB = async () => {
     await mongoClient.connect();
     console.log("Conectado a MongoDB correctamente");
 
-    const db = mongoClient.db("ariana_crm");
+    const db = mongoClient.db("pruebas_whatsapp");
 
     return db;
   } catch (error) {
