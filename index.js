@@ -603,6 +603,12 @@ async function connectToWhatsApp(id_externo) {
                         captureMessage = msg.message.documentMessage.caption || '';
                         mediaFileName = msg.message.documentMessage.fileName || null;
                         console.log(`[INFO] Document decrypted. Size: ${mediaBuffer.length} bytes. Type: ${mediaMimeType}`);
+                    } else if (msg.message.audioMessage) {
+                        mediaBuffer = await getBuffer(await downloadContentFromMessage(msg.message.audioMessage, 'audio'));
+                        mediaMimeType = msg.message.audioMessage.mimetype;
+                        originalWhatsAppMediaUrl = msg.message.audioMessage.url || null;
+                        captureMessage = '';
+                        console.log(`[INFO] Audio decrypted. Size: ${mediaBuffer.length} bytes. Type: ${mediaMimeType}`);
                     }
 
                     // Convert decrypted media buffer to Base64 if available
