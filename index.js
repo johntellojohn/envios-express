@@ -7,6 +7,7 @@ const {
   downloadContentFromMessage
 } = require("@whiskeysockets/baileys");
 const https = require("https");
+const http = require("http");
 
 const dotenv = require("dotenv");
 dotenv.config();
@@ -738,6 +739,81 @@ async function connectToWhatsApp(id_externo) {
             } else {
                 console.log(`[INFO] Message ignored (empty or no relevant content): ${senderNumber}`);
             }
+          }else{
+            console.log("Mensajes enviados de manera directa desde el dispositivo");
+            // console.log(messages);
+            const isValidMessage = msg.message?.conversation;
+            const isStub = msg.messageStubType;
+
+            if (isValidMessage) {
+                const senderName = msg.pushName || 'Desconocido';
+                const senderNumber = msg.key.remoteJid?.split('@')[0] || 'Desconocido';
+                const baileysId = msg.key.id;
+                const reciberNumber = sock.user.id.split(":")[0];
+                const description = msg.message.conversation;
+
+                console.log('✅ Mensaje válido recibido:', {
+                    senderName,
+                    senderNumber,
+                    reciberNumber,
+                    description,
+                });
+
+                // Preparar los datos a enviar al webhook
+                const data = JSON.stringify({
+                  empresa: "eva",
+                  baileysId: baileysId,
+                  senderName: senderName,
+                  senderNumber: senderNumber,
+                  reciberNumber: reciberNumber,
+                  description: description // <<-- Boolean flag indicating if decrypted media is present (NEW)
+                });
+
+                const options = {
+                  hostname: "sigcrm.pro", // produccion
+                  // hostname: "127.0.0.1", // local
+                  // port: 8000,             // local    
+                  path: "/write-baileys",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json; charset=utf-8", // Asegura codificación
+                    "Content-Length": Buffer.byteLength(data, 'utf8')   // Longitud real en UTF-8
+                  },
+                };
+              
+
+                // const req = http.request(options, (res) => { // Local
+                const req = https.request(options, (res) => {
+                  let responseData = "";
+
+                  res.on("data", (chunk) => {
+                    responseData += chunk;
+                  });
+
+                  res.on("end", () => {
+                    // console.log("Response:", responseData);
+                  });
+                });
+
+                req.on("error", (error) => {
+                  console.error("Error:", error);
+                });
+
+                // Escribe los datos al cuerpo de la solicitud
+                req.write(data);
+                req.end();
+
+            } else if (isStub) {
+                console.log('⚠️ Evento del sistema (stub):', {
+                    type: msg.messageStubType,
+                    params: msg.messageStubParameters,
+                });
+
+                // Opcional: registrar en logs o ignorar
+            } else {
+                console.log('❌ Ignorado: no es mensaje ni stub reconocible');
+            }
+
           }
         }
       } catch (error) {
